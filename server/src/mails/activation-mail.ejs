@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Activate your account</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f7; padding: 24px;">
+  <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 32px;">
+    <h2 style="color: #1a1a1a;">Welcome to E-Learning</h2>
+    <p>Hello <%= user.name %>,</p>
+    <p>Thank you for registering with E-Learning. To activate your account, please use the following activation code:</p>
+    <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; background: #f0f0f5; padding: 16px; text-align: center; border-radius: 6px; margin: 16px 0;">
+      <%= activationCode %>
+    </div>
+    <p>Please enter this code on the activation page within the next 5 minutes.</p>
+    <p>If you did not create an E-Learning account, please ignore this email.</p>
+    <p>If you have any questions, feel free to contact us.</p>
+  </div>
+</body>
+</html>
