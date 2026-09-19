@@ -11,7 +11,16 @@ export const ordersApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["Courses", "User"],
     }),
+
+    getAllOrdersAdmin: builder.query({
+      query: () => ({
+        url: "admin/orders",
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Orders"],
+    }),
   }),
 });
 
-export const { useCreateOrderMutation } = ordersApi;
+export const { useCreateOrderMutation, useGetAllOrdersAdminQuery } = ordersApi;

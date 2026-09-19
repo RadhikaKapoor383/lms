@@ -36,6 +36,46 @@ export const coursesApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["Courses"],
     }),
+
+    // ---- Admin endpoints ----
+
+    getAdminAllCourses: builder.query({
+      query: () => ({
+        url: "admin/courses",
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Courses"],
+    }),
+
+    createCourse: builder.mutation({
+      query: (data) => ({
+        url: "create-course",
+        method: "POST",
+        body: data,
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses"],
+    }),
+
+    editCourse: builder.mutation({
+      query: ({ id, data }) => ({
+        url: `edit-course/${id}`,
+        method: "PUT",
+        body: data,
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses"],
+    }),
+
+    deleteCourseAdmin: builder.mutation({
+      query: (id: string) => ({
+        url: `delete-course/${id}`,
+        method: "DELETE",
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses"],
+    }),
   }),
 });
 
@@ -44,4 +84,8 @@ export const {
   useGetCourseDetailsQuery,
   useGetCourseContentQuery,
   useAddQuestionMutation,
+  useGetAdminAllCoursesQuery,
+  useCreateCourseMutation,
+  useEditCourseMutation,
+  useDeleteCourseAdminMutation,
 } = coursesApi;
