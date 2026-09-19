@@ -48,6 +48,11 @@ export default function Header() {
 
           {user ? (
             <div className="hidden items-center gap-3 md:flex">
+              {user.role === "admin" && (
+                <Link href="/admin" className="text-sm text-mustard hover:underline">
+                  Admin
+                </Link>
+              )}
               <Link href="/profile" className="text-sm text-parchment/80 hover:text-mustard">
                 {user.name}
               </Link>
