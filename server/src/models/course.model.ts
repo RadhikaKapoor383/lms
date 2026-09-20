@@ -50,7 +50,16 @@ export interface ICourse extends Document {
   courseData: ICourseData[];
   ratings?: number;
   purchased?: number;
+  status: "Draft" | "Pending Approval" | "Published" | "Rejected" | "Archived";
 }
+
+export const COURSE_STATUSES = [
+  "Draft",
+  "Pending Approval",
+  "Published",
+  "Rejected",
+  "Archived",
+] as const;
 
 const reviewSchema = new Schema<IReview>({
   user: Object,
@@ -102,6 +111,11 @@ const courseSchema = new Schema<ICourse>(
     courseData: [courseDataSchema],
     ratings: { type: Number, default: 0 },
     purchased: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ["Draft", "Pending Approval", "Published", "Rejected", "Archived"],
+      default: "Draft",
+    },
   },
   { timestamps: true }
 );

@@ -19,6 +19,7 @@ const sampleCourses = [
     tags: "Programming",
     level: "Beginner",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    status: "Published",
     thumbnail: { public_id: "", url: "" },
     benefits: [
       { title: "Lifetime access to all lessons" },
@@ -60,6 +61,7 @@ const sampleCourses = [
     tags: "Digital Marketing",
     level: "Beginner",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    status: "Published",
     thumbnail: { public_id: "", url: "" },
     benefits: [
       { title: "Real campaign templates" },
@@ -88,6 +90,7 @@ const sampleCourses = [
     tags: "Graphic Design",
     level: "Intermediate",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    status: "Published",
     thumbnail: { public_id: "", url: "" },
     benefits: [{ title: "Figma starter kit included" }],
     prerequisites: [{ title: "Comfortable writing HTML/CSS" }],

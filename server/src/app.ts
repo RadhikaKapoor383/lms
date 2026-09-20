@@ -12,6 +12,8 @@ import orderRouter from "./routes/order.route";
 import notificationRouter from "./routes/notification.route";
 import analyticsRouter from "./routes/analytics.route";
 import layoutRouter from "./routes/layout.route";
+import announcementRouter from "./routes/announcement.route";
+import auditLogRouter from "./routes/auditLog.route";
 
 // body parser
 app.use(express.json({ limit: "50mb" }));
@@ -35,7 +37,9 @@ app.use(
   orderRouter,
   notificationRouter,
   analyticsRouter,
-  layoutRouter
+  layoutRouter,
+  announcementRouter,
+  auditLogRouter
 );
 
 // testing route
