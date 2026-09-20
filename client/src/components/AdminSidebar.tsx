@@ -7,9 +7,12 @@ const links = [
   { label: "Overview", href: "/admin" },
   { label: "Create course", href: "/admin/create-course" },
   { label: "All courses", href: "/admin/all-courses" },
+  { label: "Categories", href: "/admin/categories" },
+  { label: "Announcements", href: "/admin/announcements" },
   { label: "Users", href: "/admin/users" },
   { label: "Orders", href: "/admin/orders" },
   { label: "Notifications", href: "/admin/notifications" },
+  { label: "Activity log", href: "/admin/activity-log" },
 ];
 
 export default function AdminSidebar() {
