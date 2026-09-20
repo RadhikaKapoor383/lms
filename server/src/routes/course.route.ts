@@ -11,6 +11,7 @@ import {
   getAllCourses,
   getCourseByUser,
   getSingleCourse,
+  updateCourseStatus,
   uploadCourse,
 } from "../controllers/course.controller";
 
@@ -49,6 +50,13 @@ courseRouter.get(
   isAuthenticated,
   authorizeRoles("admin"),
   getAdminAllCourses
+);
+
+courseRouter.put(
+  "/admin/course-status/:id",
+  isAuthenticated,
+  authorizeRoles("admin"),
+  updateCourseStatus
 );
 
 courseRouter.delete(
