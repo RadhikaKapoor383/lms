@@ -1,0 +1,1236 @@
+diff --git a/client/src/app/admin/all-courses/page.tsx b/client/src/app/admin/all-courses/page.tsx
+index 809e9ee..edb80f4 100644
+--- a/client/src/app/admin/all-courses/page.tsx
++++ b/client/src/app/admin/all-courses/page.tsx
+@@ -97,7 +97,8 @@ export default function AllCoursesPage() {
+                 </span>
+               </div>
+               <p className="text-sm text-ink/60 dark:text-parchment/60">
+-                ${course.price} · {course.purchased || 0} enrolled · {course.tags}
++                ${course.price} · {course.purchased || 0} enrolled · {course.tags} ·{" "}
++                {course.instructor?.name ? `by ${course.instructor.name}` : "No instructor assigned"}
+               </p>
+             </div>
+             <div className="flex items-center gap-4">
+diff --git a/client/src/app/admin/users/page.tsx b/client/src/app/admin/users/page.tsx
+index e70a8d8..25c6544 100644
+--- a/client/src/app/admin/users/page.tsx
++++ b/client/src/app/admin/users/page.tsx
+@@ -8,8 +8,9 @@ import {
+   useUpdateUserRoleMutation,
+ } from "@/redux/features/users/usersApi";
+ import { useAppSelector } from "@/hooks/redux";
++import { ROLES } from "@/types/role";
+ 
+-const roles = ["user", "admin"];
++const roles = ROLES;
+ 
+ export default function AdminUsersPage() {
+   const { data, isLoading } = useGetAllUsersAdminQuery(undefined);
+@@ -17,6 +18,16 @@ export default function AdminUsersPage() {
+   const [deleteUser] = useDeleteUserAdminMutation();
+   const { user: currentUser } = useAppSelector((state) => state.auth);
+   const [confirmId, setConfirmId] = useState<string | null>(null);
++  const [roleError, setRoleError] = useState("");
++
++  const handleRoleChange = async (id: string, role: string) => {
++    setRoleError("");
++    try {
++      await updateRole({ id, role }).unwrap();
++    } catch (err: any) {
++      setRoleError(err?.data?.message || "Could not change the role");
++    }
++  };
+ 
+   const users = data?.users || [];
+ 
+@@ -25,6 +36,7 @@ export default function AdminUsersPage() {
+       <h1 className="font-display text-3xl text-ink dark:text-parchment">Users</h1>
+ 
+       {isLoading && <Loader />}
++      {roleError && <p className="mt-3 text-sm text-clay">{roleError}</p>}
+ 
+       <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
+         {users.map((u: any) => (
+@@ -37,7 +49,7 @@ export default function AdminUsersPage() {
+               <select
+                 value={u.role}
+                 disabled={u._id === currentUser?._id}
+-                onChange={(e) => updateRole({ id: u._id, role: e.target.value })}
++                onChange={(e) => handleRoleChange(u._id, e.target.value)}
+                 className="border border-parchment-dark bg-transparent px-2 py-1 text-sm dark:border-ink-light"
+               >
+                 {roles.map((r) => (
+diff --git a/client/src/app/dashboard/page.tsx b/client/src/app/dashboard/page.tsx
+new file mode 100644
+index 0000000..ef55e9a
+--- /dev/null
++++ b/client/src/app/dashboard/page.tsx
+@@ -0,0 +1,44 @@
++"use client";
++
++import Link from "next/link";
++import Header from "@/components/Header";
++import Footer from "@/components/Footer";
++import RoleProtected from "@/components/RoleProtected";
++import { useAppSelector } from "@/hooks/redux";
++
++// Student home. Placeholder for now - progress, deadlines, grades and
++// certificates get added here in later phases.
++export default function StudentDashboardPage() {
++  const { user } = useAppSelector((state) => state.auth);
++  const enrolled = user?.courses?.length || 0;
++
++  return (
++    <RoleProtected allowedRoles={["student"]}>
++      <Header />
++      <main className="mx-auto max-w-4xl px-6 py-16">
++        <h1 className="font-display text-4xl text-ink dark:text-parchment">
++          Welcome back, {user?.name}
++        </h1>
++
++        <div className="mt-10 grid gap-4 sm:grid-cols-2">
++          <div className="border border-parchment-dark p-5 dark:border-ink-light">
++            <p className="text-sm uppercase tracking-wide text-ink/50 dark:text-parchment/50">
++              Enrolled courses
++            </p>
++            <p className="mt-2 font-display text-3xl text-ink dark:text-parchment">
++              {enrolled}
++            </p>
++          </div>
++        </div>
++
++        <Link
++          href="/courses"
++          className="mt-8 inline-block rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark"
++        >
++          Browse courses
++        </Link>
++      </main>
++      <Footer />
++    </RoleProtected>
++  );
++}
+diff --git a/client/src/app/instructor/create-course/page.tsx b/client/src/app/instructor/create-course/page.tsx
+new file mode 100644
+index 0000000..9c48df5
+--- /dev/null
++++ b/client/src/app/instructor/create-course/page.tsx
+@@ -0,0 +1,43 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { useState } from "react";
++import CourseForm, { CourseFormValues } from "@/components/CourseForm";
++import { useCreateCourseMutation } from "@/redux/features/courses/coursesApi";
++
++export default function InstructorCreateCoursePage() {
++  const router = useRouter();
++  const [createCourse, { isLoading }] = useCreateCourseMutation();
++  const [error, setError] = useState("");
++
++  const handleSubmit = async (values: CourseFormValues) => {
++    setError("");
++    try {
++      // The server always saves an instructor's new course as a Draft
++      await createCourse(values).unwrap();
++      router.push("/instructor");
++    } catch (err: any) {
++      setError(err?.data?.message || "Could not create the course");
++    }
++  };
++
++  return (
++    <div>
++      <h1 className="font-display text-3xl text-ink dark:text-parchment">
++        Create a course
++      </h1>
++      <p className="mt-2 text-sm text-ink/60 dark:text-parchment/60">
++        New courses are saved as drafts. An admin publishes them.
++      </p>
++      {error && <p className="mt-3 text-sm text-clay">{error}</p>}
++      <div className="mt-8">
++        <CourseForm
++          onSubmit={handleSubmit}
++          isSubmitting={isLoading}
++          submitLabel="Save draft"
++          showStatus={false}
++        />
++      </div>
++    </div>
++  );
++}
+diff --git a/client/src/app/instructor/edit-course/[id]/page.tsx b/client/src/app/instructor/edit-course/[id]/page.tsx
+new file mode 100644
+index 0000000..179fb44
+--- /dev/null
++++ b/client/src/app/instructor/edit-course/[id]/page.tsx
+@@ -0,0 +1,64 @@
++"use client";
++
++import { useParams, useRouter } from "next/navigation";
++import { useState } from "react";
++import Loader from "@/components/Loader";
++import CourseForm, { CourseFormValues } from "@/components/CourseForm";
++import {
++  useEditCourseMutation,
++  useGetInstructorCoursesQuery,
++} from "@/redux/features/courses/coursesApi";
++
++export default function InstructorEditCoursePage() {
++  const params = useParams();
++  const router = useRouter();
++  const id = params?.id as string;
++
++  // Only this instructor's own courses come back, so a course that isn't
++  // theirs simply won't be found here (the server also blocks the edit itself).
++  const { data, isLoading } = useGetInstructorCoursesQuery(undefined);
++  const [editCourse, { isLoading: isSaving }] = useEditCourseMutation();
++  const [error, setError] = useState("");
++
++  const course = data?.courses?.find((c: any) => c._id === id);
++
++  const handleSubmit = async (values: CourseFormValues) => {
++    setError("");
++    try {
++      const payload: any = { ...values };
++      if (typeof payload.thumbnail === "string" && !payload.thumbnail.startsWith("data:")) {
++        delete payload.thumbnail;
++      }
++      await editCourse({ id, data: payload }).unwrap();
++      router.push("/instructor");
++    } catch (err: any) {
++      setError(err?.data?.message || "Could not save changes");
++    }
++  };
++
++  if (isLoading) return <Loader />;
++  if (!course) {
++    return <p className="text-ink/60 dark:text-parchment/60">Course not found.</p>;
++  }
++
++  return (
++    <div>
++      <h1 className="font-display text-3xl text-ink dark:text-parchment">
++        Edit course
++      </h1>
++      {error && <p className="mt-3 text-sm text-clay">{error}</p>}
++      <div className="mt-8">
++        <CourseForm
++          initialValues={{
++            ...course,
++            thumbnail: course.thumbnail?.url || "",
++          }}
++          onSubmit={handleSubmit}
++          isSubmitting={isSaving}
++          submitLabel="Save changes"
++          showStatus={false}
++        />
++      </div>
++    </div>
++  );
++}
+diff --git a/client/src/app/instructor/layout.tsx b/client/src/app/instructor/layout.tsx
+new file mode 100644
+index 0000000..064ee94
+--- /dev/null
++++ b/client/src/app/instructor/layout.tsx
+@@ -0,0 +1,21 @@
++import Header from "@/components/Header";
++import Footer from "@/components/Footer";
++import InstructorSidebar from "@/components/InstructorSidebar";
++import RoleProtected from "@/components/RoleProtected";
++
++export default function InstructorLayout({
++  children,
++}: {
++  children: React.ReactNode;
++}) {
++  return (
++    <RoleProtected allowedRoles={["instructor"]}>
++      <Header />
++      <main className="mx-auto flex max-w-6xl px-6 py-10">
++        <InstructorSidebar />
++        <div className="flex-1 pl-8">{children}</div>
++      </main>
++      <Footer />
++    </RoleProtected>
++  );
++}
+diff --git a/client/src/app/instructor/page.tsx b/client/src/app/instructor/page.tsx
+new file mode 100644
+index 0000000..b3ae502
+--- /dev/null
++++ b/client/src/app/instructor/page.tsx
+@@ -0,0 +1,96 @@
++"use client";
++
++import Link from "next/link";
++import Loader from "@/components/Loader";
++import { useGetInstructorCoursesQuery } from "@/redux/features/courses/coursesApi";
++
++const statusBadgeClass: Record<string, string> = {
++  Draft: "bg-parchment-dark text-ink/70",
++  "Pending Approval": "bg-mustard/30 text-mustard-dark",
++  Published: "bg-ink-light text-parchment",
++  Rejected: "bg-clay/20 text-clay",
++  Archived: "bg-parchment-dark text-ink/40",
++};
++
++function StatCard({ label, value }: { label: string; value: number }) {
++  return (
++    <div className="border border-parchment-dark p-5 dark:border-ink-light">
++      <p className="text-sm uppercase tracking-wide text-ink/50 dark:text-parchment/50">
++        {label}
++      </p>
++      <p className="mt-2 font-display text-3xl text-ink dark:text-parchment">
++        {value}
++      </p>
++    </div>
++  );
++}
++
++export default function InstructorDashboardPage() {
++  const { data, isLoading, isError } = useGetInstructorCoursesQuery(undefined);
++  const courses = data?.courses || [];
++
++  const count = (status: string) =>
++    courses.filter((c: any) => c.status === status).length;
++
++  return (
++    <div>
++      <div className="flex items-center justify-between">
++        <h1 className="font-display text-3xl text-ink dark:text-parchment">
++          My courses
++        </h1>
++        <Link
++          href="/instructor/create-course"
++          className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark"
++        >
++          + New course
++        </Link>
++      </div>
++
++      <div className="mt-8 grid gap-4 sm:grid-cols-3">
++        <StatCard label="Total courses" value={courses.length} />
++        <StatCard label="Published" value={count("Published")} />
++        <StatCard label="Drafts" value={count("Draft")} />
++      </div>
++
++      {isLoading && <Loader />}
++      {isError && (
++        <p className="mt-6 text-ink/60 dark:text-parchment/60">
++          Couldn&apos;t load your courses.
++        </p>
++      )}
++      {!isLoading && !isError && courses.length === 0 && (
++        <p className="mt-6 text-ink/60 dark:text-parchment/60">
++          You haven&apos;t created any courses yet.
++        </p>
++      )}
++
++      <div className="mt-6 divide-y divide-parchment-dark dark:divide-ink-light">
++        {courses.map((course: any) => (
++          <div key={course._id} className="flex items-center justify-between py-4">
++            <div>
++              <div className="flex items-center gap-3">
++                <p className="font-medium text-ink dark:text-parchment">{course.name}</p>
++                <span
++                  className={`rounded-full px-2.5 py-0.5 text-xs ${
++                    statusBadgeClass[course.status] || "bg-parchment-dark text-ink/70"
++                  }`}
++                >
++                  {course.status}
++                </span>
++              </div>
++              <p className="text-sm text-ink/60 dark:text-parchment/60">
++                ${course.price} · {course.purchased || 0} enrolled · {course.tags}
++              </p>
++            </div>
++            <Link
++              href={`/instructor/edit-course/${course._id}`}
++              className="text-sm text-mustard-dark hover:underline dark:text-mustard"
++            >
++              Edit
++            </Link>
++          </div>
++        ))}
++      </div>
++    </div>
++  );
++}
+diff --git a/client/src/app/login/page.tsx b/client/src/app/login/page.tsx
+index 831141d..e186e90 100644
+--- a/client/src/app/login/page.tsx
++++ b/client/src/app/login/page.tsx
+@@ -8,6 +8,7 @@ import Header from "@/components/Header";
+ import Footer from "@/components/Footer";
+ import { loginSchema } from "@/utils/validationSchemas";
+ import { useLoginMutation } from "@/redux/features/auth/authApi";
++import { Role, roleHome } from "@/types/role";
+ 
+ export default function LoginPage() {
+   const router = useRouter();
+@@ -20,8 +21,9 @@ export default function LoginPage() {
+     onSubmit: async (values) => {
+       setServerError("");
+       try {
+-        await login(values).unwrap();
+-        router.push("/");
++        const result = await login(values).unwrap();
++        // Each role lands on its own dashboard
++        router.push(roleHome[result?.user?.role as Role] ?? "/");
+       } catch (err: any) {
+         setServerError(err?.data?.message || "Something went wrong");
+       }
+diff --git a/client/src/components/AdminProtected.tsx b/client/src/components/AdminProtected.tsx
+index b63f72f..4dab073 100644
+--- a/client/src/components/AdminProtected.tsx
++++ b/client/src/components/AdminProtected.tsx
+@@ -1,33 +1,12 @@
+ "use client";
+ 
+-import { useRouter } from "next/navigation";
+-import { useEffect } from "react";
+-import { useAppSelector } from "@/hooks/redux";
+-import { useLoadUserQuery } from "@/redux/features/auth/authApi";
+-import Loader from "./Loader";
++import RoleProtected from "./RoleProtected";
+ 
++// Kept as a thin wrapper so existing imports (admin/layout.tsx) keep working.
+ export default function AdminProtected({
+   children,
+ }: {
+   children: React.ReactNode;
+ }) {
+-  const { user } = useAppSelector((state) => state.auth);
+-  const { isLoading } = useLoadUserQuery(undefined);
+-  const router = useRouter();
+-
+-  useEffect(() => {
+-    if (isLoading) return; // wait for /me to resolve before deciding
+-
+-    if (!user) {
+-      router.push("/login");
+-    } else if (user.role !== "admin") {
+-      router.push("/");
+-    }
+-  }, [user, isLoading, router]);
+-
+-  if (isLoading || !user || user.role !== "admin") {
+-    return <Loader />;
+-  }
+-
+-  return <>{children}</>;
+-}
+\ No newline at end of file
++  return <RoleProtected allowedRoles={["admin"]}>{children}</RoleProtected>;
++}
+diff --git a/client/src/components/CourseForm.tsx b/client/src/components/CourseForm.tsx
+index a2b3264..8bc392e 100644
+--- a/client/src/components/CourseForm.tsx
++++ b/client/src/components/CourseForm.tsx
+@@ -50,11 +50,14 @@ export default function CourseForm({
+   onSubmit,
+   isSubmitting,
+   submitLabel = "Publish course",
++  showStatus = true,
+ }: {
+   initialValues?: Partial<CourseFormValues>;
+   onSubmit: (values: CourseFormValues) => void;
+   isSubmitting: boolean;
+   submitLabel?: string;
++  // Instructors don't control status (admin approves), so their pages hide it
++  showStatus?: boolean;
+ }) {
+   const [values, setValues] = useState<CourseFormValues>({
+     name: initialValues?.name || "",
+@@ -247,23 +250,25 @@ export default function CourseForm({
+           </div>
+         </div>
+ 
+-        <div>
+-          <label className={labelClass}>Status</label>
+-          <select
+-            className={inputClass}
+-            value={values.status}
+-            onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
+-          >
+-            {COURSE_STATUSES.map((s) => (
+-              <option key={s} value={s}>
+-                {s}
+-              </option>
+-            ))}
+-          </select>
+-          <p className="mt-1 text-xs text-ink/50 dark:text-parchment/50">
+-            Only courses set to &quot;Published&quot; are visible to students.
+-          </p>
+-        </div>
++        {showStatus && (
++          <div>
++            <label className={labelClass}>Status</label>
++            <select
++              className={inputClass}
++              value={values.status}
++              onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
++            >
++              {COURSE_STATUSES.map((s) => (
++                <option key={s} value={s}>
++                  {s}
++                </option>
++              ))}
++            </select>
++            <p className="mt-1 text-xs text-ink/50 dark:text-parchment/50">
++              Only courses set to &quot;Published&quot; are visible to students.
++            </p>
++          </div>
++        )}
+ 
+         <div>
+           <label className={labelClass}>
+diff --git a/client/src/components/Header.tsx b/client/src/components/Header.tsx
+index daf6ee3..146acd2 100644
+--- a/client/src/components/Header.tsx
++++ b/client/src/components/Header.tsx
+@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
+ import { useState } from "react";
+ import { useAppSelector } from "@/hooks/redux";
+ import { useLazyLogOutQuery } from "@/redux/features/auth/authApi";
++import { Role, roleHome, roleLabel } from "@/types/role";
+ 
+ const navLinks = [
+   { label: "Courses", href: "/courses" },
+@@ -18,6 +19,11 @@ export default function Header() {
+   const [logout] = useLazyLogOutQuery();
+   const [open, setOpen] = useState(false);
+ 
++  // Each role gets its own entry point: admin, instructor area, or student dashboard
++  const roleLink = user?.role && roleHome[user.role as Role]
++    ? { href: roleHome[user.role as Role], label: roleLabel[user.role as Role] }
++    : null;
++
+   return (
+     <header className="sticky top-0 z-40 border-b border-ink-light bg-ink text-parchment">
+       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+@@ -48,9 +54,9 @@ export default function Header() {
+ 
+           {user ? (
+             <div className="hidden items-center gap-3 md:flex">
+-              {user.role === "admin" && (
+-                <Link href="/admin" className="text-sm text-mustard hover:underline">
+-                  Admin
++              {roleLink && (
++                <Link href={roleLink.href} className="text-sm text-mustard hover:underline">
++                  {roleLink.label}
+                 </Link>
+               )}
+               <Link href="/profile" className="text-sm text-parchment/80 hover:text-mustard">
+@@ -93,9 +99,16 @@ export default function Header() {
+               </Link>
+             ))}
+             {user ? (
+-              <button onClick={() => logout(undefined)} className="text-left text-mustard">
+-                Log out
+-              </button>
++              <>
++                {roleLink && (
++                  <Link href={roleLink.href} className="text-mustard">
++                    {roleLink.label}
++                  </Link>
++                )}
++                <button onClick={() => logout(undefined)} className="text-left text-mustard">
++                  Log out
++                </button>
++              </>
+             ) : (
+               <Link href="/login" className="text-mustard">
+                 Log in
+diff --git a/client/src/components/InstructorSidebar.tsx b/client/src/components/InstructorSidebar.tsx
+new file mode 100644
+index 0000000..4d1f2ea
+--- /dev/null
++++ b/client/src/components/InstructorSidebar.tsx
+@@ -0,0 +1,42 @@
++"use client";
++
++import Link from "next/link";
++import { usePathname } from "next/navigation";
++
++const links = [
++  { label: "Dashboard", href: "/instructor" },
++  { label: "Create course", href: "/instructor/create-course" },
++];
++
++export default function InstructorSidebar() {
++  const pathname = usePathname();
++
++  return (
++    <aside className="w-56 shrink-0 border-r border-parchment-dark py-8 pr-6 dark:border-ink-light">
++      <p className="px-3 font-display text-lg text-ink dark:text-parchment">
++        Instructor
++      </p>
++      <nav className="mt-6 flex flex-col gap-1">
++        {links.map((link) => {
++          const active =
++            link.href === "/instructor"
++              ? pathname === "/instructor"
++              : pathname?.startsWith(link.href);
++          return (
++            <Link
++              key={link.href}
++              href={link.href}
++              className={`rounded px-3 py-2 text-sm ${
++                active
++                  ? "bg-mustard text-ink font-medium"
++                  : "text-ink/70 hover:bg-parchment-dark/50 dark:text-parchment/70 dark:hover:bg-ink-light"
++              }`}
++            >
++              {link.label}
++            </Link>
++          );
++        })}
++      </nav>
++    </aside>
++  );
++}
+diff --git a/client/src/components/RoleProtected.tsx b/client/src/components/RoleProtected.tsx
+new file mode 100644
+index 0000000..2d46d23
+--- /dev/null
++++ b/client/src/components/RoleProtected.tsx
+@@ -0,0 +1,42 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { useEffect } from "react";
++import { useAppSelector } from "@/hooks/redux";
++import { useLoadUserQuery } from "@/redux/features/auth/authApi";
++import { Role, roleHome } from "@/types/role";
++import Loader from "./Loader";
++
++// Client-side route guard: only users whose role is in `allowedRoles` see the
++// children. This is a convenience for the UI - the real protection is the
++// authorizeRoles middleware on the server, which checks every API request.
++export default function RoleProtected({
++  allowedRoles,
++  children,
++}: {
++  allowedRoles: Role[];
++  children: React.ReactNode;
++}) {
++  const { user } = useAppSelector((state) => state.auth);
++  const { isLoading } = useLoadUserQuery(undefined);
++  const router = useRouter();
++
++  const allowed = !!user && allowedRoles.includes(user.role);
++
++  useEffect(() => {
++    if (isLoading) return; // wait for /me to resolve before deciding
++
++    if (!user) {
++      router.push("/login");
++    } else if (!allowed) {
++      // Send them to their own area instead of a dead end
++      router.push(roleHome[user.role as Role] ?? "/");
++    }
++  }, [user, isLoading, allowed, router]);
++
++  if (isLoading || !allowed) {
++    return <Loader />;
++  }
++
++  return <>{children}</>;
++}
+diff --git a/client/src/redux/features/auth/authSlice.ts b/client/src/redux/features/auth/authSlice.ts
+index fc21470..fdc4b30 100644
+--- a/client/src/redux/features/auth/authSlice.ts
++++ b/client/src/redux/features/auth/authSlice.ts
+@@ -1,8 +1,19 @@
+ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
++import { Role } from "@/types/role";
++
++// The fields the UI relies on are typed; the index signature keeps the rest
++// of the server's user object (avatar, courses, timestamps...) usable.
++export interface AuthUser {
++  _id: string;
++  name: string;
++  email: string;
++  role: Role;
++  [key: string]: any;
++}
+ 
+ interface AuthState {
+   token: string;
+-  user: any;
++  user: AuthUser | null;
+ }
+ 
+ const initialState: AuthState = {
+@@ -22,7 +33,7 @@ const authSlice = createSlice({
+     },
+     userLoggedIn: (
+       state,
+-      action: PayloadAction<{ accessToken: string; user: any }>
++      action: PayloadAction<{ accessToken: string; user: AuthUser }>
+     ) => {
+       state.token = action.payload.accessToken;
+       state.user = action.payload.user;
+diff --git a/client/src/redux/features/courses/coursesApi.ts b/client/src/redux/features/courses/coursesApi.ts
+index d128635..b1ef60f 100644
+--- a/client/src/redux/features/courses/coursesApi.ts
++++ b/client/src/redux/features/courses/coursesApi.ts
+@@ -48,6 +48,17 @@ export const coursesApi = apiSlice.injectEndpoints({
+       providesTags: ["Courses"],
+     }),
+ 
++    // ---- Instructor endpoints ----
++
++    getInstructorCourses: builder.query({
++      query: () => ({
++        url: "instructor/courses",
++        method: "GET",
++        credentials: "include",
++      }),
++      providesTags: ["Courses"],
++    }),
++
+     updateCourseStatus: builder.mutation({
+       query: ({ id, status }: { id: string; status: string }) => ({
+         url: `admin/course-status/${id}`,
+@@ -95,6 +106,7 @@ export const {
+   useGetCourseContentQuery,
+   useAddQuestionMutation,
+   useGetAdminAllCoursesQuery,
++  useGetInstructorCoursesQuery,
+   useCreateCourseMutation,
+   useEditCourseMutation,
+   useDeleteCourseAdminMutation,
+diff --git a/client/src/types/role.ts b/client/src/types/role.ts
+new file mode 100644
+index 0000000..1402a91
+--- /dev/null
++++ b/client/src/types/role.ts
+@@ -0,0 +1,18 @@
++// Mirrors USER_ROLES on the server (server/src/models/user.model.ts).
++// Keep the two lists in sync - the server is the source of truth.
++export const ROLES = ["admin", "instructor", "student"] as const;
++export type Role = (typeof ROLES)[number];
++
++// Where each role lands after login / when redirected away from a page
++// they aren't allowed to see.
++export const roleHome: Record<Role, string> = {
++  admin: "/admin",
++  instructor: "/instructor",
++  student: "/dashboard",
++};
++
++export const roleLabel: Record<Role, string> = {
++  admin: "Admin",
++  instructor: "Instructor",
++  student: "My learning",
++};
+diff --git a/server/package.json b/server/package.json
+index 593c488..c2f612b 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -6,6 +6,7 @@
+   "scripts": {
+     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+     "seed": "ts-node-dev --transpile-only src/seed.ts",
++    "migrate:roles": "ts-node-dev --transpile-only src/migrate-roles.ts",
+     "build": "tsc && cp -r src/mails dist/mails",
+     "start": "node dist/server.js"
+   },
+diff --git a/server/src/controllers/course.controller.ts b/server/src/controllers/course.controller.ts
+index ceb6a55..21ca85e 100644
+--- a/server/src/controllers/course.controller.ts
++++ b/server/src/controllers/course.controller.ts
+@@ -7,19 +7,60 @@ import path from "path";
+ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
+ import ErrorHandler from "../utils/ErrorHandler";
+ import CourseModel, { COURSE_STATUSES, ICourse } from "../models/course.model";
++import userModel from "../models/user.model";
+ import NotificationModel from "../models/notification.model";
+ import { redis } from "../utils/redis";
+ import sendMail from "../utils/sendMail";
+ import { logActivity } from "../utils/auditLog";
+ 
+-// ------------------- Create course (admin) -------------------
++// ------------------- Role helpers -------------------
++
++// Fields an instructor must never be able to set through the request body.
++// Without this, an instructor could publish their own course (skipping admin
++// approval), hand a course to someone else, or fake ratings/enrollment counts.
++const INSTRUCTOR_LOCKED_FIELDS = [
++  "instructor",
++  "status",
++  "ratings",
++  "purchased",
++  "reviews",
++] as const;
++
++const stripLockedFields = (data: Record<string, any>) => {
++  for (const field of INSTRUCTOR_LOCKED_FIELDS) {
++    delete data[field];
++  }
++};
++
++// When an admin assigns a course to someone, make sure that id is really an instructor.
++const isValidInstructorId = async (id: any): Promise<boolean> => {
++  if (!mongoose.Types.ObjectId.isValid(id)) return false;
++  const instructor = await userModel.findOne({ _id: id, role: "instructor" }).select("_id");
++  return !!instructor;
++};
++
++// ------------------- Create course (admin / instructor) -------------------
+ 
+ export const uploadCourse = CatchAsyncError(
+   async (req: Request, res: Response, next: NextFunction) => {
+     try {
+-      const data = req.body;
++      const data = { ...req.body };
+       const thumbnail = data.thumbnail;
+ 
++      if (req.user?.role === "instructor") {
++        // Instructor: the course is always theirs and always starts as a Draft
++        stripLockedFields(data);
++        data.instructor = req.user._id;
++        data.status = "Draft";
++      } else if (data.instructor) {
++        // Admin assigning an instructor at creation time
++        if (!(await isValidInstructorId(data.instructor))) {
++          return next(new ErrorHandler("Selected user is not an instructor", 400));
++        }
++      } else {
++        delete data.instructor;
++      }
++
+       if (thumbnail) {
+         const myCloud = await cloudinary.v2.uploader.upload(thumbnail, {
+           folder: "courses",
+@@ -43,14 +84,27 @@ export const uploadCourse = CatchAsyncError(
+   }
+ );
+ 
+-// ------------------- Edit course (admin) -------------------
++// ------------------- Edit course (admin, or the instructor who owns it) -------------------
++// Ownership is enforced by authorizeCourseOwner on the route.
+ 
+ export const editCourse = CatchAsyncError(
+   async (req: Request, res: Response, next: NextFunction) => {
+     try {
+-      const data = req.body;
++      const data = { ...req.body };
+       const thumbnail = data.thumbnail;
+ 
++      if (req.user?.role === "instructor") {
++        // Silently ignore locked fields (the shared CourseForm always sends "status")
++        stripLockedFields(data);
++      } else if ("instructor" in data) {
++        // Admin re-assigning the course to another instructor
++        if (!data.instructor) {
++          delete data.instructor;
++        } else if (!(await isValidInstructorId(data.instructor))) {
++          return next(new ErrorHandler("Selected user is not an instructor", 400));
++        }
++      }
++
+       if (thumbnail) {
+         await cloudinary.v2.uploader.destroy(thumbnail.public_id);
+         const myCloud = await cloudinary.v2.uploader.upload(thumbnail, {
+@@ -430,7 +484,24 @@ export const getAdminAllCourses = CatchAsyncError(
+     try {
+       const { status } = req.query;
+       const filter = status ? { status } : {};
+-      const courses = await CourseModel.find(filter).sort({ createdAt: -1 });
++      const courses = await CourseModel.find(filter)
++        .populate("instructor", "name email")
++        .sort({ createdAt: -1 });
++      res.status(200).json({ success: true, courses });
++    } catch (error: any) {
++      return next(new ErrorHandler(error.message, 500));
++    }
++  }
++);
++
++// ------------------- Get my courses (instructor) -------------------
++
++export const getInstructorCourses = CatchAsyncError(
++  async (req: Request, res: Response, next: NextFunction) => {
++    try {
++      const courses = await CourseModel.find({
++        instructor: req.user?._id,
++      }).sort({ createdAt: -1 });
+       res.status(200).json({ success: true, courses });
+     } catch (error: any) {
+       return next(new ErrorHandler(error.message, 500));
+diff --git a/server/src/controllers/user.controller.ts b/server/src/controllers/user.controller.ts
+index e60d5b8..b0acb31 100644
+--- a/server/src/controllers/user.controller.ts
++++ b/server/src/controllers/user.controller.ts
+@@ -5,8 +5,9 @@ import path from "path";
+ import dotenv from "dotenv";
+ dotenv.config();
+ import cloudinary from "cloudinary";
++import mongoose from "mongoose";
+ 
+-import userModel, { IUser } from "../models/user.model";
++import userModel, { IUser, USER_ROLES } from "../models/user.model";
+ import ErrorHandler from "../utils/ErrorHandler";
+ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
+ import sendMail from "../utils/sendMail";
+@@ -376,13 +377,45 @@ export const updateUserRole = CatchAsyncError(
+   async (req: Request, res: Response, next: NextFunction) => {
+     try {
+       const { id, role } = req.body;
++
++      // 1. Only the roles we actually define are allowed
++      if (!(USER_ROLES as readonly string[]).includes(role)) {
++        return next(
++          new ErrorHandler(`Role must be one of: ${USER_ROLES.join(", ")}`, 400)
++        );
++      }
++
++      if (!mongoose.Types.ObjectId.isValid(id)) {
++        return next(new ErrorHandler("Invalid user id", 400));
++      }
++
++      // 2. Admins can't change their own role (prevents locking out the last admin)
++      if (String(req.user?._id) === String(id)) {
++        return next(new ErrorHandler("You cannot change your own role", 403));
++      }
++
+       const user = await userModel.findByIdAndUpdate(
+         id,
+         { role },
+-        { new: true }
++        { new: true, runValidators: true }
+       );
+ 
+-      logActivity(req, "user.role_update", `Changed ${user?.name}'s role to ${role}`, {
++      if (!user) {
++        return next(new ErrorHandler("User not found", 404));
++      }
++
++      // 3. isAuthenticated reads the role from the Redis session, not from
++      // MongoDB. Update the cached session too, otherwise the old role keeps
++      // working until the session is rebuilt. (No session = user is logged out;
++      // login will pick up the new role from the DB.)
++      const cachedSession = await redis.get(id);
++      if (cachedSession) {
++        const session = JSON.parse(cachedSession);
++        session.role = role;
++        await redis.set(id, JSON.stringify(session), "EX", 7 * 24 * 60 * 60);
++      }
++
++      logActivity(req, "user.role_update", `Changed ${user.name}'s role to ${role}`, {
+         targetUserId: id,
+         role,
+       });
+@@ -400,6 +433,11 @@ export const deleteUser = CatchAsyncError(
+   async (req: Request, res: Response, next: NextFunction) => {
+     try {
+       const { id } = req.params;
++
++      if (String(req.user?._id) === String(id)) {
++        return next(new ErrorHandler("You cannot delete your own account here", 403));
++      }
++
+       const user = await userModel.findById(id);
+ 
+       if (!user) {
+diff --git a/server/src/middleware/auth.ts b/server/src/middleware/auth.ts
+index a5fbbc4..9305f9c 100644
+--- a/server/src/middleware/auth.ts
++++ b/server/src/middleware/auth.ts
+@@ -3,6 +3,8 @@ import { CatchAsyncError } from "./catchAsyncErrors";
+ import ErrorHandler from "../utils/ErrorHandler";
+ import jwt, { JwtPayload } from "jsonwebtoken";
+ import { redis } from "../utils/redis";
++import mongoose from "mongoose";
++import CourseModel from "../models/course.model";
+ 
+ export const isAuthenticated = CatchAsyncError(
+   async (req: Request, res: Response, next: NextFunction) => {
+@@ -48,3 +50,37 @@ export const authorizeRoles = (...roles: string[]) => {
+     next();
+   };
+ };
++
++// Layer 3: ownership. Roles say *what kind* of user you are; this says whether
++// the course in the URL (/:id) is actually yours. Admins can manage any course.
++// Use it AFTER isAuthenticated (and normally after authorizeRoles).
++export const authorizeCourseOwner = CatchAsyncError(
++  async (req: Request, res: Response, next: NextFunction) => {
++    if (req.user?.role === "admin") {
++      return next();
++    }
++
++    const courseId = req.params.id;
++    if (!mongoose.Types.ObjectId.isValid(courseId)) {
++      return next(new ErrorHandler("Invalid course id", 400));
++    }
++
++    const course = await CourseModel.findById(courseId).select("instructor");
++    if (!course) {
++      return next(new ErrorHandler("Course not found", 404));
++    }
++
++    // req.user comes from the Redis session, so _id is a plain string here.
++    const isOwner =
++      !!course.instructor &&
++      String(course.instructor) === String(req.user?._id);
++
++    if (!isOwner) {
++      return next(
++        new ErrorHandler("You can only manage your own courses", 403)
++      );
++    }
++
++    next();
++  }
++);
+diff --git a/server/src/migrate-roles.ts b/server/src/migrate-roles.ts
+new file mode 100644
+index 0000000..5b2fdff
+--- /dev/null
++++ b/server/src/migrate-roles.ts
+@@ -0,0 +1,52 @@
++// One-time migration for the move from 2 roles ("user" / "admin") to 3 roles
++// ("student" / "instructor" / "admin").
++//
++// Run it ONCE, right after deploying the new user model:
++//   npm run migrate:roles
++//
++// It is safe to run again - if nothing needs fixing it just reports 0.
++import dotenv from "dotenv";
++dotenv.config();
++
++import mongoose from "mongoose";
++import connectDB from "./utils/db";
++import { redis } from "./utils/redis";
++import userModel, { USER_ROLES } from "./models/user.model";
++
++const migrate = async () => {
++  await connectDB();
++
++  // Every user whose role is not one of the 3 valid roles ("user", or missing)
++  // becomes a student. Admins are untouched.
++  const legacyUsers = await userModel
++    .find({ role: { $nin: [...USER_ROLES] } })
++    .select("_id email");
++
++  console.log(`Found ${legacyUsers.length} user(s) with a legacy role`);
++
++  for (const user of legacyUsers) {
++    await userModel.updateOne({ _id: user._id }, { $set: { role: "student" } });
++
++    // The role is also cached inside the Redis session (see isAuthenticated),
++    // so patch that too or the user keeps the old role until they log in again.
++    const id = String(user._id);
++    const cached = await redis.get(id);
++    if (cached) {
++      const session = JSON.parse(cached);
++      session.role = "student";
++      await redis.set(id, JSON.stringify(session), "EX", 7 * 24 * 60 * 60);
++    }
++
++    console.log(`  ${user.email}: -> student`);
++  }
++
++  console.log("Role migration complete.");
++  await mongoose.disconnect();
++  await redis.quit();
++  process.exit(0);
++};
++
++migrate().catch((err) => {
++  console.error("Migration failed:", err);
++  process.exit(1);
++});
+diff --git a/server/src/models/course.model.ts b/server/src/models/course.model.ts
+index 6620398..174bdc5 100644
+--- a/server/src/models/course.model.ts
++++ b/server/src/models/course.model.ts
+@@ -33,6 +33,9 @@ export interface ICourseData extends Document {
+ }
+ 
+ export interface ICourse extends Document {
++  // The instructor who owns this course. Optional so courses created before
++  // roles existed (or admin-created, not-yet-assigned courses) stay valid.
++  instructor?: mongoose.Types.ObjectId;
+   name: string;
+   description: string;
+   price: number;
+@@ -94,6 +97,7 @@ const courseDataSchema = new Schema<ICourseData>({
+ 
+ const courseSchema = new Schema<ICourse>(
+   {
++    instructor: { type: Schema.Types.ObjectId, ref: "User", index: true },
+     name: { type: String, required: true },
+     description: { type: String, required: true },
+     price: { type: Number, required: true },
+diff --git a/server/src/models/user.model.ts b/server/src/models/user.model.ts
+index a906392..4469924 100644
+--- a/server/src/models/user.model.ts
++++ b/server/src/models/user.model.ts
+@@ -6,6 +6,11 @@ dotenv.config();
+ 
+ const emailRegexPattern: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+ 
++// Single source of truth for roles. Routes, controllers and the admin
++// "change role" endpoint all read from here, so a typo can't create a new role.
++export const USER_ROLES = ["admin", "instructor", "student"] as const;
++export type UserRole = (typeof USER_ROLES)[number];
++
+ export interface IUser extends Document {
+   name: string;
+   email: string;
+@@ -14,7 +19,7 @@ export interface IUser extends Document {
+     public_id: string;
+     url: string;
+   };
+-  role: string;
++  role: UserRole;
+   isVerified: boolean;
+   courses: Array<{ courseId: string }>;
+   comparePassword: (password: string) => Promise<boolean>;
+@@ -49,7 +54,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
+     },
+     role: {
+       type: String,
+-      default: "user",
++      enum: USER_ROLES,
++      default: "student",
+     },
+     isVerified: {
+       type: Boolean,
+diff --git a/server/src/routes/course.route.ts b/server/src/routes/course.route.ts
+index e1880ab..c99a3d6 100644
+--- a/server/src/routes/course.route.ts
++++ b/server/src/routes/course.route.ts
+@@ -1,5 +1,9 @@
+ import express from "express";
+-import { authorizeRoles, isAuthenticated } from "../middleware/auth";
++import {
++  authorizeCourseOwner,
++  authorizeRoles,
++  isAuthenticated,
++} from "../middleware/auth";
+ import {
+   addAnswer,
+   addQuestion,
+@@ -9,6 +13,7 @@ import {
+   editCourse,
+   getAdminAllCourses,
+   getAllCourses,
++  getInstructorCourses,
+   getCourseByUser,
+   getSingleCourse,
+   updateCourseStatus,
+@@ -17,20 +22,30 @@ import {
+ 
+ const courseRouter = express.Router();
+ 
++// Admin can create/edit any course; an instructor only their own
++// (authorizeCourseOwner checks the course's instructor against the logged-in user).
+ courseRouter.post(
+   "/create-course",
+   isAuthenticated,
+-  authorizeRoles("admin"),
++  authorizeRoles("admin", "instructor"),
+   uploadCourse
+ );
+ 
+ courseRouter.put(
+   "/edit-course/:id",
+   isAuthenticated,
+-  authorizeRoles("admin"),
++  authorizeRoles("admin", "instructor"),
++  authorizeCourseOwner,
+   editCourse
+ );
+ 
++courseRouter.get(
++  "/instructor/courses",
++  isAuthenticated,
++  authorizeRoles("instructor"),
++  getInstructorCourses
++);
++
+ courseRouter.get("/get-course/:id", getSingleCourse);
+ courseRouter.get("/get-courses", getAllCourses);
+ courseRouter.get("/get-course-content/:id", isAuthenticated, getCourseByUser);
+diff --git a/server/src/seed.ts b/server/src/seed.ts
+index 00ca7af..a304f91 100644
+--- a/server/src/seed.ts
++++ b/server/src/seed.ts
+@@ -9,6 +9,12 @@ import CourseModel from "./models/course.model";
+ const ADMIN_EMAIL = "admin@ledger.dev";
+ const ADMIN_PASSWORD = "admin1234";
+ 
++// DEV ONLY demo accounts so you can test each role locally.
++// Never seed these into a deployed database.
++const INSTRUCTOR_EMAIL = "instructor@ledger.dev";
++const STUDENT_EMAIL = "student@ledger.dev";
++const DEMO_PASSWORD = "demo1234";
++
+ const sampleCourses = [
+   {
+     name: "Complete Web Development with the MERN Stack",
+@@ -132,14 +138,42 @@ const seed = async () => {
+     console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
+   }
+ 
+-  // 2. Create sample courses (skip any that already exist by name)
+-  for (const course of sampleCourses) {
++  // 2. Create demo instructor + student (dev only)
++  const demoUsers = [
++    { name: "Demo Instructor", email: INSTRUCTOR_EMAIL, role: "instructor" as const },
++    { name: "Demo Student", email: STUDENT_EMAIL, role: "student" as const },
++  ];
++  const created: Record<string, any> = {};
++  for (const demo of demoUsers) {
++    let demoUser = await userModel.findOne({ email: demo.email });
++    if (!demoUser) {
++      demoUser = await userModel.create({
++        ...demo,
++        password: DEMO_PASSWORD,
++        isVerified: true,
++      });
++      console.log(`Created ${demo.role}: ${demo.email} / ${DEMO_PASSWORD}`);
++    }
++    created[demo.role] = demoUser;
++  }
++
++  // 3. Create sample courses (skip any that already exist by name).
++  // The first course belongs to the demo instructor; the rest are unassigned,
++  // which lets you test "instructor can edit own course but not others".
++  for (const [index, course] of sampleCourses.entries()) {
++    const owner = index === 0 ? created.instructor._id : undefined;
+     const exists = await CourseModel.findOne({ name: course.name });
+     if (exists) {
+-      console.log(`Skipping (already exists): ${course.name}`);
++      if (owner && !exists.instructor) {
++        exists.instructor = owner;
++        await exists.save();
++        console.log(`Assigned to demo instructor: ${course.name}`);
++      } else {
++        console.log(`Skipping (already exists): ${course.name}`);
++      }
+       continue;
+     }
+-    await CourseModel.create(course);
++    await CourseModel.create({ ...course, instructor: owner });
+     console.log(`Created course: ${course.name}`);
+   }
+ 
+@@ -147,6 +181,8 @@ const seed = async () => {
+   console.log(`  Email:    ${ADMIN_EMAIL}`);
+   console.log(`  Password: ${ADMIN_PASSWORD}`);
+   console.log("(change this password once you've logged in)");
++  console.log(`Demo instructor: ${INSTRUCTOR_EMAIL} / ${DEMO_PASSWORD}`);
++  console.log(`Demo student:    ${STUDENT_EMAIL} / ${DEMO_PASSWORD}`);
+ 
+   await mongoose.disconnect();
+   process.exit(0);
