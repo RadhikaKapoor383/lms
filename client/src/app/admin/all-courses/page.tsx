@@ -3,14 +3,30 @@
 import Link from "next/link";
 import { useState } from "react";
 import Loader from "@/components/Loader";
+import { COURSE_STATUSES } from "@/components/CourseForm";
 import {
   useDeleteCourseAdminMutation,
   useGetAdminAllCoursesQuery,
+  useUpdateCourseStatusMutation,
 } from "@/redux/features/courses/coursesApi";
 
+const statusBadgeClass: Record<string, string> = {
+  Draft: "bg-parchment-dark text-ink/70",
+  "Pending Approval": "bg-mustard/30 text-mustard-dark",
+  Published: "bg-ink-light text-parchment",
+  Rejected: "bg-clay/20 text-clay",
+  Archived: "bg-parchment-dark text-ink/40",
+};
+
+const tabs = ["All", ...COURSE_STATUSES];
+
 export default function AllCoursesPage() {
-  const { data, isLoading, isError } = useGetAdminAllCoursesQuery(undefined);
+  const [activeTab, setActiveTab] = useState("All");
+  const { data, isLoading, isError } = useGetAdminAllCoursesQuery(
+    activeTab === "All" ? undefined : activeTab
+  );
   const [deleteCourse] = useDeleteCourseAdminMutation();
+  const [updateStatus] = useUpdateCourseStatusMutation();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const courses = data?.courses || [];
@@ -34,6 +50,22 @@ export default function AllCoursesPage() {
         </Link>
       </div>
 
+      <div className="mt-6 flex flex-wrap gap-2 border-b border-parchment-dark pb-4 dark:border-ink-light">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`rounded-full px-4 py-1.5 text-sm ${
+              activeTab === tab
+                ? "bg-ink text-parchment dark:bg-parchment dark:text-ink"
+                : "text-ink/60 hover:bg-parchment-dark/50 dark:text-parchment/60 dark:hover:bg-ink-light"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
       {isLoading && <Loader />}
       {isError && (
         <p className="mt-6 text-ink/60 dark:text-parchment/60">
@@ -43,23 +75,46 @@ export default function AllCoursesPage() {
 
       {courses.length === 0 && !isLoading && (
         <p className="mt-6 text-ink/60 dark:text-parchment/60">
-          No courses yet — create your first one.
+          No courses in this view.
         </p>
       )}
 
-      <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
+      <div className="mt-4 divide-y divide-parchment-dark dark:divide-ink-light">
         {courses.map((course: any) => (
           <div
             key={course._id}
             className="flex items-center justify-between py-4"
           >
             <div>
-              <p className="font-medium text-ink dark:text-parchment">{course.name}</p>
+              <div className="flex items-center gap-3">
+                <p className="font-medium text-ink dark:text-parchment">{course.name}</p>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs ${
+                    statusBadgeClass[course.status] || "bg-parchment-dark text-ink/70"
+                  }`}
+                >
+                  {course.status}
+                </span>
+              </div>
               <p className="text-sm text-ink/60 dark:text-parchment/60">
                 ${course.price} · {course.purchased || 0} enrolled · {course.tags}
               </p>
             </div>
             <div className="flex items-center gap-4">
+              <select
+                value={course.status}
+                onChange={(e) =>
+                  updateStatus({ id: course._id, status: e.target.value })
+                }
+                className="border border-parchment-dark bg-transparent px-2 py-1 text-sm dark:border-ink-light"
+              >
+                {COURSE_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+
               <Link
                 href={`/admin/edit-course/${course._id}`}
                 className="text-sm text-mustard-dark hover:underline dark:text-mustard"
