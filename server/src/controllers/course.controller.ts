@@ -6,10 +6,11 @@ import path from "path";
 
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
-import CourseModel, { ICourse } from "../models/course.model";
+import CourseModel, { COURSE_STATUSES, ICourse } from "../models/course.model";
 import NotificationModel from "../models/notification.model";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
+import { logActivity } from "../utils/auditLog";
 
 // ------------------- Create course (admin) -------------------
 
@@ -30,6 +31,11 @@ export const uploadCourse = CatchAsyncError(
       }
 
       const course = await CourseModel.create(data);
+
+      logActivity(req, "course.create", `Created course "${course.name}"`, {
+        courseId: course._id,
+      });
+
       res.status(201).json({ success: true, course });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -63,6 +69,13 @@ export const editCourse = CatchAsyncError(
         { new: true }
       );
 
+      await redis.del(courseId);
+      await redis.del("allCourses");
+
+      logActivity(req, "course.edit", `Edited course "${course?.name}"`, {
+        courseId,
+      });
+
       res.status(201).json({ success: true, course });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -83,9 +96,16 @@ export const getSingleCourse = CatchAsyncError(
         return res.status(200).json({ success: true, course });
       }
 
-      const course = await CourseModel.findById(courseId).select(
+      const course = await CourseModel.findOne({
+        _id: courseId,
+        status: "Published",
+      }).select(
         "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
       );
+
+      if (!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
 
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7 days
 
@@ -108,11 +128,11 @@ export const getAllCourses = CatchAsyncError(
         return res.status(200).json({ success: true, courses });
       }
 
-      const courses = await CourseModel.find().select(
+      const courses = await CourseModel.find({ status: "Published" }).select(
         "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
       );
 
-      await redis.set("allCourses", JSON.stringify(courses));
+      await redis.set("allCourses", JSON.stringify(courses), "EX", 604800); // 7 days
 
       res.status(200).json({ success: true, courses });
     } catch (error: any) {
@@ -390,6 +410,11 @@ export const deleteCourse = CatchAsyncError(
 
       await course.deleteOne({ _id: id });
       await redis.del(id);
+      await redis.del("allCourses");
+
+      logActivity(req, "course.delete", `Deleted course "${course.name}"`, {
+        courseId: id,
+      });
 
       res.status(200).json({ success: true, message: "Course deleted successfully" });
     } catch (error: any) {
@@ -398,13 +423,56 @@ export const deleteCourse = CatchAsyncError(
   }
 );
 
-// ------------------- Get all courses (admin, unsanitized) -------------------
+// ------------------- Get all courses (admin, unsanitized, optional status filter) -------------------
 
 export const getAdminAllCourses = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const courses = await CourseModel.find().sort({ createdAt: -1 });
+      const { status } = req.query;
+      const filter = status ? { status } : {};
+      const courses = await CourseModel.find(filter).sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Update course status (admin) -------------------
+
+export const updateCourseStatus = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { status } = req.body;
+      const { id } = req.params;
+
+      if (!COURSE_STATUSES.includes(status)) {
+        return next(new ErrorHandler("Invalid course status", 400));
+      }
+
+      const course = await CourseModel.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+
+      if (!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
+
+      // A status change affects public visibility, so both the individual
+      // course cache and the "all courses" list cache need to be dropped.
+      await redis.del(id);
+      await redis.del("allCourses");
+
+      logActivity(
+        req,
+        "course.status_change",
+        `Changed "${course.name}" status to ${status}`,
+        { courseId: id, status }
+      );
+
+      res.status(200).json({ success: true, course });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }

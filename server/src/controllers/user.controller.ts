@@ -16,6 +16,7 @@ import {
   sendToken,
 } from "../utils/jwt";
 import { redis } from "../utils/redis";
+import { logActivity } from "../utils/auditLog";
 
 // ------------------- Registration -------------------
 
@@ -380,6 +381,12 @@ export const updateUserRole = CatchAsyncError(
         { role },
         { new: true }
       );
+
+      logActivity(req, "user.role_update", `Changed ${user?.name}'s role to ${role}`, {
+        targetUserId: id,
+        role,
+      });
+
       res.status(200).json({ success: true, user });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -401,6 +408,10 @@ export const deleteUser = CatchAsyncError(
 
       await user.deleteOne({ _id: id });
       await redis.del(id);
+
+      logActivity(req, "user.delete", `Deleted user "${user.name}" (${user.email})`, {
+        targetUserId: id,
+      });
 
       res.status(200).json({ success: true, message: "User deleted successfully" });
     } catch (error: any) {
