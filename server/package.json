@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "seed": "ts-node-dev --transpile-only src/seed.ts",
+    "migrate:roles": "ts-node-dev --transpile-only src/migrate-roles.ts",
     "build": "tsc && cp -r src/mails dist/mails",
     "start": "node dist/server.js"
   },

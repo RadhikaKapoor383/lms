@@ -1,5 +1,9 @@
 import express from "express";
-import { authorizeRoles, isAuthenticated } from "../middleware/auth";
+import {
+  authorizeCourseOwner,
+  authorizeRoles,
+  isAuthenticated,
+} from "../middleware/auth";
 import {
   addAnswer,
   addQuestion,
@@ -9,6 +13,7 @@ import {
   editCourse,
   getAdminAllCourses,
   getAllCourses,
+  getInstructorCourses,
   getCourseByUser,
   getSingleCourse,
   updateCourseStatus,
@@ -17,18 +22,28 @@ import {
 
 const courseRouter = express.Router();
 
+// Admin can create/edit any course; an instructor only their own
+// (authorizeCourseOwner checks the course's instructor against the logged-in user).
 courseRouter.post(
   "/create-course",
   isAuthenticated,
-  authorizeRoles("admin"),
+  authorizeRoles("admin", "instructor"),
   uploadCourse
 );
 
 courseRouter.put(
   "/edit-course/:id",
   isAuthenticated,
-  authorizeRoles("admin"),
+  authorizeRoles("admin", "instructor"),
+  authorizeCourseOwner,
   editCourse
+);
+
+courseRouter.get(
+  "/instructor/courses",
+  isAuthenticated,
+  authorizeRoles("instructor"),
+  getInstructorCourses
 );
 
 courseRouter.get("/get-course/:id", getSingleCourse);

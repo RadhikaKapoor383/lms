@@ -7,18 +7,59 @@ import path from "path";
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import CourseModel, { COURSE_STATUSES, ICourse } from "../models/course.model";
+import userModel from "../models/user.model";
 import NotificationModel from "../models/notification.model";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
 import { logActivity } from "../utils/auditLog";
 
-// ------------------- Create course (admin) -------------------
+// ------------------- Role helpers -------------------
+
+// Fields an instructor must never be able to set through the request body.
+// Without this, an instructor could publish their own course (skipping admin
+// approval), hand a course to someone else, or fake ratings/enrollment counts.
+const INSTRUCTOR_LOCKED_FIELDS = [
+  "instructor",
+  "status",
+  "ratings",
+  "purchased",
+  "reviews",
+] as const;
+
+const stripLockedFields = (data: Record<string, any>) => {
+  for (const field of INSTRUCTOR_LOCKED_FIELDS) {
+    delete data[field];
+  }
+};
+
+// When an admin assigns a course to someone, make sure that id is really an instructor.
+const isValidInstructorId = async (id: any): Promise<boolean> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) return false;
+  const instructor = await userModel.findOne({ _id: id, role: "instructor" }).select("_id");
+  return !!instructor;
+};
+
+// ------------------- Create course (admin / instructor) -------------------
 
 export const uploadCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = req.body;
+      const data = { ...req.body };
       const thumbnail = data.thumbnail;
+
+      if (req.user?.role === "instructor") {
+        // Instructor: the course is always theirs and always starts as a Draft
+        stripLockedFields(data);
+        data.instructor = req.user._id;
+        data.status = "Draft";
+      } else if (data.instructor) {
+        // Admin assigning an instructor at creation time
+        if (!(await isValidInstructorId(data.instructor))) {
+          return next(new ErrorHandler("Selected user is not an instructor", 400));
+        }
+      } else {
+        delete data.instructor;
+      }
 
       if (thumbnail) {
         const myCloud = await cloudinary.v2.uploader.upload(thumbnail, {
@@ -43,13 +84,26 @@ export const uploadCourse = CatchAsyncError(
   }
 );
 
-// ------------------- Edit course (admin) -------------------
+// ------------------- Edit course (admin, or the instructor who owns it) -------------------
+// Ownership is enforced by authorizeCourseOwner on the route.
 
 export const editCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = req.body;
+      const data = { ...req.body };
       const thumbnail = data.thumbnail;
+
+      if (req.user?.role === "instructor") {
+        // Silently ignore locked fields (the shared CourseForm always sends "status")
+        stripLockedFields(data);
+      } else if ("instructor" in data) {
+        // Admin re-assigning the course to another instructor
+        if (!data.instructor) {
+          delete data.instructor;
+        } else if (!(await isValidInstructorId(data.instructor))) {
+          return next(new ErrorHandler("Selected user is not an instructor", 400));
+        }
+      }
 
       if (thumbnail) {
         await cloudinary.v2.uploader.destroy(thumbnail.public_id);
@@ -430,7 +484,24 @@ export const getAdminAllCourses = CatchAsyncError(
     try {
       const { status } = req.query;
       const filter = status ? { status } : {};
-      const courses = await CourseModel.find(filter).sort({ createdAt: -1 });
+      const courses = await CourseModel.find(filter)
+        .populate("instructor", "name email")
+        .sort({ createdAt: -1 });
+      res.status(200).json({ success: true, courses });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Get my courses (instructor) -------------------
+
+export const getInstructorCourses = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const courses = await CourseModel.find({
+        instructor: req.user?._id,
+      }).sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));

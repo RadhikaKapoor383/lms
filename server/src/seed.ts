@@ -9,6 +9,12 @@ import CourseModel from "./models/course.model";
 const ADMIN_EMAIL = "admin@ledger.dev";
 const ADMIN_PASSWORD = "admin1234";
 
+// DEV ONLY demo accounts so you can test each role locally.
+// Never seed these into a deployed database.
+const INSTRUCTOR_EMAIL = "instructor@ledger.dev";
+const STUDENT_EMAIL = "student@ledger.dev";
+const DEMO_PASSWORD = "demo1234";
+
 const sampleCourses = [
   {
     name: "Complete Web Development with the MERN Stack",
@@ -132,14 +138,42 @@ const seed = async () => {
     console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
   }
 
-  // 2. Create sample courses (skip any that already exist by name)
-  for (const course of sampleCourses) {
+  // 2. Create demo instructor + student (dev only)
+  const demoUsers = [
+    { name: "Demo Instructor", email: INSTRUCTOR_EMAIL, role: "instructor" as const },
+    { name: "Demo Student", email: STUDENT_EMAIL, role: "student" as const },
+  ];
+  const created: Record<string, any> = {};
+  for (const demo of demoUsers) {
+    let demoUser = await userModel.findOne({ email: demo.email });
+    if (!demoUser) {
+      demoUser = await userModel.create({
+        ...demo,
+        password: DEMO_PASSWORD,
+        isVerified: true,
+      });
+      console.log(`Created ${demo.role}: ${demo.email} / ${DEMO_PASSWORD}`);
+    }
+    created[demo.role] = demoUser;
+  }
+
+  // 3. Create sample courses (skip any that already exist by name).
+  // The first course belongs to the demo instructor; the rest are unassigned,
+  // which lets you test "instructor can edit own course but not others".
+  for (const [index, course] of sampleCourses.entries()) {
+    const owner = index === 0 ? created.instructor._id : undefined;
     const exists = await CourseModel.findOne({ name: course.name });
     if (exists) {
-      console.log(`Skipping (already exists): ${course.name}`);
+      if (owner && !exists.instructor) {
+        exists.instructor = owner;
+        await exists.save();
+        console.log(`Assigned to demo instructor: ${course.name}`);
+      } else {
+        console.log(`Skipping (already exists): ${course.name}`);
+      }
       continue;
     }
-    await CourseModel.create(course);
+    await CourseModel.create({ ...course, instructor: owner });
     console.log(`Created course: ${course.name}`);
   }
 
@@ -147,6 +181,8 @@ const seed = async () => {
   console.log(`  Email:    ${ADMIN_EMAIL}`);
   console.log(`  Password: ${ADMIN_PASSWORD}`);
   console.log("(change this password once you've logged in)");
+  console.log(`Demo instructor: ${INSTRUCTOR_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`Demo student:    ${STUDENT_EMAIL} / ${DEMO_PASSWORD}`);
 
   await mongoose.disconnect();
   process.exit(0);

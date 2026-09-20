@@ -48,6 +48,17 @@ export const coursesApi = apiSlice.injectEndpoints({
       providesTags: ["Courses"],
     }),
 
+    // ---- Instructor endpoints ----
+
+    getInstructorCourses: builder.query({
+      query: () => ({
+        url: "instructor/courses",
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Courses"],
+    }),
+
     updateCourseStatus: builder.mutation({
       query: ({ id, status }: { id: string; status: string }) => ({
         url: `admin/course-status/${id}`,
@@ -95,6 +106,7 @@ export const {
   useGetCourseContentQuery,
   useAddQuestionMutation,
   useGetAdminAllCoursesQuery,
+  useGetInstructorCoursesQuery,
   useCreateCourseMutation,
   useEditCourseMutation,
   useDeleteCourseAdminMutation,

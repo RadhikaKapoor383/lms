@@ -8,8 +8,9 @@ import {
   useUpdateUserRoleMutation,
 } from "@/redux/features/users/usersApi";
 import { useAppSelector } from "@/hooks/redux";
+import { ROLES } from "@/types/role";
 
-const roles = ["user", "admin"];
+const roles = ROLES;
 
 export default function AdminUsersPage() {
   const { data, isLoading } = useGetAllUsersAdminQuery(undefined);
@@ -17,6 +18,16 @@ export default function AdminUsersPage() {
   const [deleteUser] = useDeleteUserAdminMutation();
   const { user: currentUser } = useAppSelector((state) => state.auth);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState("");
+
+  const handleRoleChange = async (id: string, role: string) => {
+    setRoleError("");
+    try {
+      await updateRole({ id, role }).unwrap();
+    } catch (err: any) {
+      setRoleError(err?.data?.message || "Could not change the role");
+    }
+  };
 
   const users = data?.users || [];
 
@@ -25,6 +36,7 @@ export default function AdminUsersPage() {
       <h1 className="font-display text-3xl text-ink dark:text-parchment">Users</h1>
 
       {isLoading && <Loader />}
+      {roleError && <p className="mt-3 text-sm text-clay">{roleError}</p>}
 
       <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
         {users.map((u: any) => (
@@ -37,7 +49,7 @@ export default function AdminUsersPage() {
               <select
                 value={u.role}
                 disabled={u._id === currentUser?._id}
-                onChange={(e) => updateRole({ id: u._id, role: e.target.value })}
+                onChange={(e) => handleRoleChange(u._id, e.target.value)}
                 className="border border-parchment-dark bg-transparent px-2 py-1 text-sm dark:border-ink-light"
               >
                 {roles.map((r) => (

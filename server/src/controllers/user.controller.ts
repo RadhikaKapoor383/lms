@@ -5,8 +5,9 @@ import path from "path";
 import dotenv from "dotenv";
 dotenv.config();
 import cloudinary from "cloudinary";
+import mongoose from "mongoose";
 
-import userModel, { IUser } from "../models/user.model";
+import userModel, { IUser, USER_ROLES } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import sendMail from "../utils/sendMail";
@@ -376,13 +377,45 @@ export const updateUserRole = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id, role } = req.body;
+
+      // 1. Only the roles we actually define are allowed
+      if (!(USER_ROLES as readonly string[]).includes(role)) {
+        return next(
+          new ErrorHandler(`Role must be one of: ${USER_ROLES.join(", ")}`, 400)
+        );
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return next(new ErrorHandler("Invalid user id", 400));
+      }
+
+      // 2. Admins can't change their own role (prevents locking out the last admin)
+      if (String(req.user?._id) === String(id)) {
+        return next(new ErrorHandler("You cannot change your own role", 403));
+      }
+
       const user = await userModel.findByIdAndUpdate(
         id,
         { role },
-        { new: true }
+        { new: true, runValidators: true }
       );
 
-      logActivity(req, "user.role_update", `Changed ${user?.name}'s role to ${role}`, {
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      // 3. isAuthenticated reads the role from the Redis session, not from
+      // MongoDB. Update the cached session too, otherwise the old role keeps
+      // working until the session is rebuilt. (No session = user is logged out;
+      // login will pick up the new role from the DB.)
+      const cachedSession = await redis.get(id);
+      if (cachedSession) {
+        const session = JSON.parse(cachedSession);
+        session.role = role;
+        await redis.set(id, JSON.stringify(session), "EX", 7 * 24 * 60 * 60);
+      }
+
+      logActivity(req, "user.role_update", `Changed ${user.name}'s role to ${role}`, {
         targetUserId: id,
         role,
       });
@@ -400,6 +433,11 @@ export const deleteUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
+
+      if (String(req.user?._id) === String(id)) {
+        return next(new ErrorHandler("You cannot delete your own account here", 403));
+      }
+
       const user = await userModel.findById(id);
 
       if (!user) {

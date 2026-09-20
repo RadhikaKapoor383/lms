@@ -3,6 +3,8 @@ import { CatchAsyncError } from "./catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { redis } from "../utils/redis";
+import mongoose from "mongoose";
+import CourseModel from "../models/course.model";
 
 export const isAuthenticated = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -48,3 +50,37 @@ export const authorizeRoles = (...roles: string[]) => {
     next();
   };
 };
+
+// Layer 3: ownership. Roles say *what kind* of user you are; this says whether
+// the course in the URL (/:id) is actually yours. Admins can manage any course.
+// Use it AFTER isAuthenticated (and normally after authorizeRoles).
+export const authorizeCourseOwner = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === "admin") {
+      return next();
+    }
+
+    const courseId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(courseId)) {
+      return next(new ErrorHandler("Invalid course id", 400));
+    }
+
+    const course = await CourseModel.findById(courseId).select("instructor");
+    if (!course) {
+      return next(new ErrorHandler("Course not found", 404));
+    }
+
+    // req.user comes from the Redis session, so _id is a plain string here.
+    const isOwner =
+      !!course.instructor &&
+      String(course.instructor) === String(req.user?._id);
+
+    if (!isOwner) {
+      return next(
+        new ErrorHandler("You can only manage your own courses", 403)
+      );
+    }
+
+    next();
+  }
+);

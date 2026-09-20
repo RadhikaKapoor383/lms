@@ -6,6 +6,11 @@ dotenv.config();
 
 const emailRegexPattern: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Single source of truth for roles. Routes, controllers and the admin
+// "change role" endpoint all read from here, so a typo can't create a new role.
+export const USER_ROLES = ["admin", "instructor", "student"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -14,7 +19,7 @@ export interface IUser extends Document {
     public_id: string;
     url: string;
   };
-  role: string;
+  role: UserRole;
   isVerified: boolean;
   courses: Array<{ courseId: string }>;
   comparePassword: (password: string) => Promise<boolean>;
@@ -49,7 +54,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     },
     role: {
       type: String,
-      default: "user",
+      enum: USER_ROLES,
+      default: "student",
     },
     isVerified: {
       type: Boolean,

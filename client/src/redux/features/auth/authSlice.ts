@@ -1,8 +1,19 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { Role } from "@/types/role";
+
+// The fields the UI relies on are typed; the index signature keeps the rest
+// of the server's user object (avatar, courses, timestamps...) usable.
+export interface AuthUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: Role;
+  [key: string]: any;
+}
 
 interface AuthState {
   token: string;
-  user: any;
+  user: AuthUser | null;
 }
 
 const initialState: AuthState = {
@@ -22,7 +33,7 @@ const authSlice = createSlice({
     },
     userLoggedIn: (
       state,
-      action: PayloadAction<{ accessToken: string; user: any }>
+      action: PayloadAction<{ accessToken: string; user: AuthUser }>
     ) => {
       state.token = action.payload.accessToken;
       state.user = action.payload.user;

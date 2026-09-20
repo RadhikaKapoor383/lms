@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { loginSchema } from "@/utils/validationSchemas";
 import { useLoginMutation } from "@/redux/features/auth/authApi";
+import { Role, roleHome } from "@/types/role";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,8 +21,9 @@ export default function LoginPage() {
     onSubmit: async (values) => {
       setServerError("");
       try {
-        await login(values).unwrap();
-        router.push("/");
+        const result = await login(values).unwrap();
+        // Each role lands on its own dashboard
+        router.push(roleHome[result?.user?.role as Role] ?? "/");
       } catch (err: any) {
         setServerError(err?.data?.message || "Something went wrong");
       }

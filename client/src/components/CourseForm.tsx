@@ -50,11 +50,14 @@ export default function CourseForm({
   onSubmit,
   isSubmitting,
   submitLabel = "Publish course",
+  showStatus = true,
 }: {
   initialValues?: Partial<CourseFormValues>;
   onSubmit: (values: CourseFormValues) => void;
   isSubmitting: boolean;
   submitLabel?: string;
+  // Instructors don't control status (admin approves), so their pages hide it
+  showStatus?: boolean;
 }) {
   const [values, setValues] = useState<CourseFormValues>({
     name: initialValues?.name || "",
@@ -247,23 +250,25 @@ export default function CourseForm({
           </div>
         </div>
 
-        <div>
-          <label className={labelClass}>Status</label>
-          <select
-            className={inputClass}
-            value={values.status}
-            onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
-          >
-            {COURSE_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-ink/50 dark:text-parchment/50">
-            Only courses set to &quot;Published&quot; are visible to students.
-          </p>
-        </div>
+        {showStatus && (
+          <div>
+            <label className={labelClass}>Status</label>
+            <select
+              className={inputClass}
+              value={values.status}
+              onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
+            >
+              {COURSE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink/50 dark:text-parchment/50">
+              Only courses set to &quot;Published&quot; are visible to students.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className={labelClass}>

@@ -33,6 +33,9 @@ export interface ICourseData extends Document {
 }
 
 export interface ICourse extends Document {
+  // The instructor who owns this course. Optional so courses created before
+  // roles existed (or admin-created, not-yet-assigned courses) stay valid.
+  instructor?: mongoose.Types.ObjectId;
   name: string;
   description: string;
   price: number;
@@ -94,6 +97,7 @@ const courseDataSchema = new Schema<ICourseData>({
 
 const courseSchema = new Schema<ICourse>(
   {
+    instructor: { type: Schema.Types.ObjectId, ref: "User", index: true },
     name: { type: String, required: true },
     description: { type: String, required: true },
     price: { type: Number, required: true },

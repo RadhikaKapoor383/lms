@@ -97,7 +97,8 @@ export default function AllCoursesPage() {
                 </span>
               </div>
               <p className="text-sm text-ink/60 dark:text-parchment/60">
-                ${course.price} · {course.purchased || 0} enrolled · {course.tags}
+                ${course.price} · {course.purchased || 0} enrolled · {course.tags} ·{" "}
+                {course.instructor?.name ? `by ${course.instructor.name}` : "No instructor assigned"}
               </p>
             </div>
             <div className="flex items-center gap-4">

@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import { useAppSelector } from "@/hooks/redux";
 import { useLazyLogOutQuery } from "@/redux/features/auth/authApi";
+import { Role, roleHome, roleLabel } from "@/types/role";
 
 const navLinks = [
   { label: "Courses", href: "/courses" },
@@ -17,6 +18,11 @@ export default function Header() {
   const { user } = useAppSelector((state) => state.auth);
   const [logout] = useLazyLogOutQuery();
   const [open, setOpen] = useState(false);
+
+  // Each role gets its own entry point: admin, instructor area, or student dashboard
+  const roleLink = user?.role && roleHome[user.role as Role]
+    ? { href: roleHome[user.role as Role], label: roleLabel[user.role as Role] }
+    : null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink-light bg-ink text-parchment">
@@ -48,9 +54,9 @@ export default function Header() {
 
           {user ? (
             <div className="hidden items-center gap-3 md:flex">
-              {user.role === "admin" && (
-                <Link href="/admin" className="text-sm text-mustard hover:underline">
-                  Admin
+              {roleLink && (
+                <Link href={roleLink.href} className="text-sm text-mustard hover:underline">
+                  {roleLink.label}
                 </Link>
               )}
               <Link href="/profile" className="text-sm text-parchment/80 hover:text-mustard">
@@ -93,9 +99,16 @@ export default function Header() {
               </Link>
             ))}
             {user ? (
-              <button onClick={() => logout(undefined)} className="text-left text-mustard">
-                Log out
-              </button>
+              <>
+                {roleLink && (
+                  <Link href={roleLink.href} className="text-mustard">
+                    {roleLink.label}
+                  </Link>
+                )}
+                <button onClick={() => logout(undefined)} className="text-left text-mustard">
+                  Log out
+                </button>
+              </>
             ) : (
               <Link href="/login" className="text-mustard">
                 Log in
