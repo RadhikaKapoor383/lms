@@ -25,7 +25,16 @@ export type CourseFormValues = {
   benefits: Benefit[];
   prerequisites: Benefit[];
   courseData: Lesson[];
+  status: string;
 };
+
+export const COURSE_STATUSES = [
+  "Draft",
+  "Pending Approval",
+  "Published",
+  "Rejected",
+  "Archived",
+];
 
 const emptyLesson: Lesson = {
   title: "",
@@ -63,6 +72,7 @@ export default function CourseForm({
     courseData: initialValues?.courseData?.length
       ? initialValues.courseData
       : [{ ...emptyLesson }],
+    status: initialValues?.status || "Draft",
   });
 
   const [thumbnailPreview, setThumbnailPreview] = useState(
@@ -235,6 +245,24 @@ export default function CourseForm({
               <option>Advanced</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Status</label>
+          <select
+            className={inputClass}
+            value={values.status}
+            onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
+          >
+            {COURSE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-ink/50 dark:text-parchment/50">
+            Only courses set to &quot;Published&quot; are visible to students.
+          </p>
         </div>
 
         <div>
