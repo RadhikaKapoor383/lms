@@ -1,4 +1,4 @@
-# Learning Management System (LMS).
+# Learning Management System (LMS)
 
 A full-stack learning management system built with Next.js on the frontend and Express + TypeScript + MongoDB on the backend. The platform is designed for course delivery, user management, instructor workflows, analytics, notifications, and role-based access.
 
