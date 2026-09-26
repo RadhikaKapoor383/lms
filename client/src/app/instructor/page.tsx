@@ -82,12 +82,20 @@ export default function InstructorDashboardPage() {
                 ${course.price} · {course.purchased || 0} enrolled · {course.category?.name || "No category"}
               </p>
             </div>
-            <Link
-              href={`/instructor/edit-course/${course._id}`}
-              className="text-sm text-mustard-dark hover:underline dark:text-mustard"
-            >
-              Edit
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href={`/instructor/edit-course/${course._id}`}
+                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Edit
+              </Link>
+              <Link
+                href={`/instructor/courses/${course._id}/students`}
+                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Students
+              </Link>
+            </div>
           </div>
         ))}
       </div>
