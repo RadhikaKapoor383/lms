@@ -109,7 +109,11 @@ export const getMyEnrollments = CatchAsyncError(
         student: req.user?._id,
         status: { $ne: "revoked" },
       })
-        .populate("course", "name thumbnail level tags price")
+        .populate({
+          path: "course",
+          select: "name thumbnail level category price",
+          populate: { path: "category", select: "name" },
+        })
         .populate("instructor", "name")
         .sort({ createdAt: -1 });
 

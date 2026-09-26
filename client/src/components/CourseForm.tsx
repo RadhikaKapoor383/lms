@@ -20,6 +20,10 @@ export type CourseFormValues = {
   price: number;
   estimatedPrice: number;
   category: string; // Category._id
+  enrollmentMode: "open" | "manual" | "code";
+  // Only sent when set to a non-empty value (a new code, or changing one).
+  // Leaving it blank on edit keeps whatever code is already saved.
+  enrollmentCode: string;
   level: string;
   demoUrl: string;
   thumbnail: string; // base64 on create, existing URL on edit unless replaced
@@ -69,6 +73,8 @@ export default function CourseForm({
     price: initialValues?.price || 0,
     estimatedPrice: initialValues?.estimatedPrice || 0,
     category: initialValues?.category || "",
+    enrollmentMode: initialValues?.enrollmentMode || "open",
+    enrollmentCode: "",
     level: initialValues?.level || "Beginner",
     demoUrl: initialValues?.demoUrl || "",
     thumbnail: initialValues?.thumbnail || "",
@@ -227,6 +233,40 @@ export default function CourseForm({
               }
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Who can enroll</label>
+            <select
+              className={inputClass}
+              value={values.enrollmentMode}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  enrollmentMode: e.target.value as CourseFormValues["enrollmentMode"],
+                }))
+              }
+            >
+              <option value="open">Open — students enroll or buy it themselves</option>
+              <option value="manual">Private — only the instructor adds students</option>
+              <option value="code">Invite code — students need a code to join</option>
+            </select>
+          </div>
+          {values.enrollmentMode === "code" && (
+            <div>
+              <label className={labelClass}>
+                Enrollment code{initialValues?.enrollmentMode === "code" ? " (leave blank to keep the current one)" : ""}
+              </label>
+              <input
+                className={inputClass}
+                value={values.enrollmentCode}
+                onChange={(e) => setValues((v) => ({ ...v, enrollmentCode: e.target.value }))}
+                placeholder="At least 6 characters"
+                minLength={6}
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
