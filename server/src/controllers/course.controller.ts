@@ -1,13 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import cloudinary from "cloudinary";
+import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import ejs from "ejs";
 import path from "path";
 
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
-import CourseModel, { COURSE_STATUSES, ICourse } from "../models/course.model";
+import CourseModel, {
+  COURSE_STATUSES,
+  ENROLLMENT_MODES,
+  ICourse,
+} from "../models/course.model";
+import CategoryModel from "../models/category.model";
 import userModel from "../models/user.model";
+import EnrollmentModel from "../models/enrollment.model";
+import LessonProgressModel from "../models/lessonProgress.model";
+import { hasActiveEnrollment, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
@@ -39,6 +48,36 @@ const isValidInstructorId = async (id: any): Promise<boolean> => {
   return !!instructor;
 };
 
+const isValidCategoryId = async (id: any): Promise<boolean> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) return false;
+  return !!(await CategoryModel.exists({ _id: id }));
+};
+
+// Enrollment settings coming from the form: mode + optional plain-text code.
+// The code is hashed before it is saved (like a password) and the plain text is
+// thrown away. Clients can never send the hash themselves.
+// Returns an error message, or null if everything is fine.
+const prepareEnrollmentSettings = async (
+  data: Record<string, any>
+): Promise<string | null> => {
+  delete data.enrollmentCodeHash;
+
+  if (data.enrollmentMode !== undefined && !(ENROLLMENT_MODES as readonly string[]).includes(data.enrollmentMode)) {
+    return `Enrollment mode must be one of: ${ENROLLMENT_MODES.join(", ")}`;
+  }
+
+  const code = typeof data.enrollmentCode === "string" ? data.enrollmentCode.trim() : "";
+  delete data.enrollmentCode;
+
+  if (code) {
+    if (code.length < 6) {
+      return "Enrollment code must be at least 6 characters";
+    }
+    data.enrollmentCodeHash = await bcrypt.hash(code, 10);
+  }
+  return null;
+};
+
 // ------------------- Create course (admin / instructor) -------------------
 
 export const uploadCourse = CatchAsyncError(
@@ -59,6 +98,18 @@ export const uploadCourse = CatchAsyncError(
         }
       } else {
         delete data.instructor;
+      }
+
+      if (!(await isValidCategoryId(data.category))) {
+        return next(new ErrorHandler("Choose a valid category", 400));
+      }
+
+      const settingsError = await prepareEnrollmentSettings(data);
+      if (settingsError) {
+        return next(new ErrorHandler(settingsError, 400));
+      }
+      if (data.enrollmentMode === "code" && !data.enrollmentCodeHash) {
+        return next(new ErrorHandler("Set an enrollment code for a code-based course", 400));
       }
 
       if (thumbnail) {
@@ -102,6 +153,22 @@ export const editCourse = CatchAsyncError(
           delete data.instructor;
         } else if (!(await isValidInstructorId(data.instructor))) {
           return next(new ErrorHandler("Selected user is not an instructor", 400));
+        }
+      }
+
+      if ("category" in data && !(await isValidCategoryId(data.category))) {
+        return next(new ErrorHandler("Choose a valid category", 400));
+      }
+
+      const settingsError = await prepareEnrollmentSettings(data);
+      if (settingsError) {
+        return next(new ErrorHandler(settingsError, 400));
+      }
+      if (data.enrollmentMode === "code" && !data.enrollmentCodeHash) {
+        // switching to code mode without a new code: the course must already have one
+        const current = await CourseModel.findById(req.params.id).select("+enrollmentCodeHash");
+        if (!current?.enrollmentCodeHash) {
+          return next(new ErrorHandler("Set an enrollment code for a code-based course", 400));
         }
       }
 
@@ -153,9 +220,11 @@ export const getSingleCourse = CatchAsyncError(
       const course = await CourseModel.findOne({
         _id: courseId,
         status: "Published",
-      }).select(
-        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
-      );
+      })
+        .select(
+          "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
+        )
+        .populate("category", "name");
 
       if (!course) {
         return next(new ErrorHandler("Course not found", 404));
@@ -182,9 +251,11 @@ export const getAllCourses = CatchAsyncError(
         return res.status(200).json({ success: true, courses });
       }
 
-      const courses = await CourseModel.find({ status: "Published" }).select(
-        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
-      );
+      const courses = await CourseModel.find({ status: "Published" })
+        .select(
+          "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
+        )
+        .populate("category", "name");
 
       await redis.set("allCourses", JSON.stringify(courses), "EX", 604800); // 7 days
 
@@ -200,14 +271,30 @@ export const getAllCourses = CatchAsyncError(
 export const getCourseByUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userCourseList = req.user?.courses || [];
       const courseId = req.params.id;
+      const role = req.user?.role;
 
-      const courseExists = userCourseList.find(
-        (course: any) => course.courseId === courseId
-      );
+      if (!isObjectId(courseId)) {
+        return next(new ErrorHandler("You are not eligible to access this course", 404));
+      }
 
-      if (!courseExists) {
+      // Who may open the content:
+      //  - admin: any course
+      //  - instructor: their own course (to preview it)
+      //  - student: only with an active enrollment (checked in the DB, so a
+      //    student who was removed loses access immediately)
+      let allowed = role === "admin";
+
+      if (!allowed && role === "instructor") {
+        const owned = await CourseModel.findById(courseId).select("instructor");
+        allowed = !!owned?.instructor && String(owned.instructor) === String(req.user?._id);
+      }
+
+      if (!allowed) {
+        allowed = await hasActiveEnrollment(String(req.user?._id), courseId);
+      }
+
+      if (!allowed) {
         return next(
           new ErrorHandler("You are not eligible to access this course", 404)
         );
@@ -463,6 +550,15 @@ export const deleteCourse = CatchAsyncError(
       }
 
       await course.deleteOne({ _id: id });
+
+      // Clean up everything that pointed at this course
+      await EnrollmentModel.deleteMany({ course: id });
+      await LessonProgressModel.deleteMany({ course: id });
+      await userModel.updateMany(
+        { "courses.courseId": id },
+        { $pull: { courses: { courseId: id } } } as any
+      );
+
       await redis.del(id);
       await redis.del("allCourses");
 
@@ -486,6 +582,7 @@ export const getAdminAllCourses = CatchAsyncError(
       const filter = status ? { status } : {};
       const courses = await CourseModel.find(filter)
         .populate("instructor", "name email")
+        .populate("category", "name")
         .sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
     } catch (error: any) {
@@ -501,7 +598,9 @@ export const getInstructorCourses = CatchAsyncError(
     try {
       const courses = await CourseModel.find({
         instructor: req.user?._id,
-      }).sort({ createdAt: -1 });
+      })
+        .populate("category", "name")
+        .sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
