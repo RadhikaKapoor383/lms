@@ -7,6 +7,10 @@ import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
 import { useGetCourseDetailsQuery } from "@/redux/features/courses/coursesApi";
 import { useCreateOrderMutation } from "@/redux/features/orders/ordersApi";
+import {
+  useEnrollInFreeCourseMutation,
+  useEnrollWithCodeMutation,
+} from "@/redux/features/enrollment/enrollmentApi";
 import { useAppSelector } from "@/hooks/redux";
 
 export default function CourseDetailsPage() {
@@ -16,31 +20,122 @@ export default function CourseDetailsPage() {
 
   const { user } = useAppSelector((state) => state.auth);
   const { data, isLoading, isError } = useGetCourseDetailsQuery(id);
-  const [createOrder, { isLoading: isEnrolling }] = useCreateOrderMutation();
+  const [enrollFree, { isLoading: isEnrollingFree }] = useEnrollInFreeCourseMutation();
+  const [createOrder, { isLoading: isPurchasing }] = useCreateOrderMutation();
+  const [enrollWithCode, { isLoading: isRedeeming }] = useEnrollWithCodeMutation();
+
+  const [code, setCode] = useState("");
   const [enrollError, setEnrollError] = useState("");
 
   const course = data?.course;
+  const isBusy = isEnrollingFree || isPurchasing || isRedeeming;
 
+  // user.courses stays in sync with Enrollment on the server (see
+  // enrollment.service.ts), so this is a fast, no-extra-request access check.
   const alreadyOwned = user?.courses?.some(
     (c: any) => c.courseId?.toString() === id
   );
 
-  const handleEnroll = async () => {
+  const goToCourse = () => router.push(`/course-access/${id}`);
+
+  const handleFreeEnroll = async () => {
     setEnrollError("");
-
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
+    if (!user) return router.push("/login");
     try {
-      // No payment gateway wired up yet - this grants access directly.
-      // Swap this for a real Stripe confirmation before going live.
-      await createOrder({ courseId: id, payment_info: {} }).unwrap();
-      router.push(`/course-access/${id}`);
+      await enrollFree(id).unwrap();
+      goToCourse();
     } catch (err: any) {
-      setEnrollError(err?.data?.message || "Could not complete enrollment");
+      setEnrollError(err?.data?.message || "Could not enroll");
     }
+  };
+
+  const handlePurchase = async () => {
+    setEnrollError("");
+    if (!user) return router.push("/login");
+    try {
+      // No real payment gateway yet - the server simulates a successful
+      // charge and enrolls immediately. See order.controller.ts.
+      await createOrder({ courseId: id, payment_info: {} }).unwrap();
+      goToCourse();
+    } catch (err: any) {
+      setEnrollError(err?.data?.message || "Could not complete purchase");
+    }
+  };
+
+  const handleCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEnrollError("");
+    if (!user) return router.push("/login");
+    try {
+      await enrollWithCode({ courseId: id, code }).unwrap();
+      goToCourse();
+    } catch (err: any) {
+      setEnrollError(err?.data?.message || "Invalid course or enrollment code");
+    }
+  };
+
+  const renderCta = () => {
+    if (alreadyOwned) {
+      return (
+        <button
+          onClick={goToCourse}
+          className="ml-auto rounded-full bg-ink px-6 py-3 font-medium text-parchment hover:bg-ink-light dark:bg-parchment dark:text-ink"
+        >
+          Go to course
+        </button>
+      );
+    }
+
+    if (course.enrollmentMode === "manual") {
+      return (
+        <p className="ml-auto text-sm text-ink/60 dark:text-parchment/60">
+          Seats for this course are added by the instructor. Ask them for access.
+        </p>
+      );
+    }
+
+    if (course.enrollmentMode === "code") {
+      return (
+        <form onSubmit={handleCodeSubmit} className="ml-auto flex gap-2">
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Enrollment code"
+            className="border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+          />
+          <button
+            type="submit"
+            disabled={isBusy || !code.trim()}
+            className="rounded-full bg-mustard px-5 py-2.5 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+          >
+            {isRedeeming ? "Checking..." : "Redeem"}
+          </button>
+        </form>
+      );
+    }
+
+    // enrollmentMode === "open"
+    if (course.price > 0) {
+      return (
+        <button
+          onClick={handlePurchase}
+          disabled={isBusy}
+          className="ml-auto rounded-full bg-mustard px-6 py-3 font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+        >
+          {isPurchasing ? "Processing..." : `Buy for $${course.price}`}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={handleFreeEnroll}
+        disabled={isBusy}
+        className="ml-auto rounded-full bg-mustard px-6 py-3 font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+      >
+        {isEnrollingFree ? "Enrolling..." : "Enroll for free"}
+      </button>
+    );
   };
 
   return (
@@ -68,7 +163,7 @@ export default function CourseDetailsPage() {
             </p>
 
             <div className="mt-10 border-y border-parchment-dark py-6 dark:border-ink-light">
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-6">
                 <span className="font-display text-3xl text-ink dark:text-parchment">
                   ${course.price}
                 </span>
@@ -78,22 +173,7 @@ export default function CourseDetailsPage() {
                   </span>
                 )}
 
-                {alreadyOwned ? (
-                  <button
-                    onClick={() => router.push(`/course-access/${id}`)}
-                    className="ml-auto rounded-full bg-ink px-6 py-3 font-medium text-parchment hover:bg-ink-light dark:bg-parchment dark:text-ink"
-                  >
-                    Go to course
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleEnroll}
-                    disabled={isEnrolling}
-                    className="ml-auto rounded-full bg-mustard px-6 py-3 font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
-                  >
-                    {isEnrolling ? "Enrolling..." : "Enroll now"}
-                  </button>
-                )}
+                {renderCta()}
               </div>
               {enrollError && <p className="mt-3 text-sm text-clay">{enrollError}</p>}
             </div>
