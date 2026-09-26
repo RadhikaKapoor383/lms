@@ -4,7 +4,12 @@ import { createOrder, getAllOrders } from "../controllers/order.controller";
 
 const orderRouter = express.Router();
 
-orderRouter.post("/create-order", isAuthenticated, createOrder);
+orderRouter.post(
+  "/create-order",
+  isAuthenticated,
+  authorizeRoles("student"),
+  createOrder
+);
 orderRouter.get(
   "/admin/orders",
   isAuthenticated,
