@@ -5,6 +5,7 @@ dotenv.config();
 import connectDB from "./utils/db";
 import userModel from "./models/user.model";
 import CourseModel from "./models/course.model";
+import CategoryModel from "./models/category.model";
 
 const ADMIN_EMAIL = "admin@ledger.dev";
 const ADMIN_PASSWORD = "admin1234";
@@ -157,23 +158,46 @@ const seed = async () => {
     created[demo.role] = demoUser;
   }
 
-  // 3. Create sample courses (skip any that already exist by name).
+  // 3. Create (or find) a Category for each sample course's tag
+  const categoryByTag: Record<string, any> = {};
+  for (const course of sampleCourses) {
+    if (categoryByTag[course.tags]) continue;
+    let category = await CategoryModel.findOne({ name: course.tags });
+    if (!category) {
+      category = await CategoryModel.create({ name: course.tags });
+      console.log(`Created category: ${course.tags}`);
+    }
+    categoryByTag[course.tags] = category;
+  }
+
+  // 4. Create sample courses (skip any that already exist by name).
   // The first course belongs to the demo instructor; the rest are unassigned,
   // which lets you test "instructor can edit own course but not others".
   for (const [index, course] of sampleCourses.entries()) {
     const owner = index === 0 ? created.instructor._id : undefined;
+    const { tags, ...courseFields } = course;
+    const category = categoryByTag[tags];
+
     const exists = await CourseModel.findOne({ name: course.name });
     if (exists) {
+      let changed = false;
       if (owner && !exists.instructor) {
         exists.instructor = owner;
+        changed = true;
+      }
+      if (!exists.category) {
+        exists.category = category._id;
+        changed = true;
+      }
+      if (changed) {
         await exists.save();
-        console.log(`Assigned to demo instructor: ${course.name}`);
+        console.log(`Updated existing course: ${course.name}`);
       } else {
         console.log(`Skipping (already exists): ${course.name}`);
       }
       continue;
     }
-    await CourseModel.create({ ...course, instructor: owner });
+    await CourseModel.create({ ...courseFields, category: category._id, instructor: owner });
     console.log(`Created course: ${course.name}`);
   }
 
