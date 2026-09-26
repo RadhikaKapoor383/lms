@@ -6,17 +6,29 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
 import VideoPlayer from "@/components/VideoPlayer";
+import { useAppSelector } from "@/hooks/redux";
 import {
   useAddQuestionMutation,
   useGetCourseContentQuery,
 } from "@/redux/features/courses/coursesApi";
+import {
+  useGetCourseProgressQuery,
+  useUpdateLessonProgressMutation,
+} from "@/redux/features/enrollment/enrollmentApi";
 
 export default function CourseAccessPage() {
   const params = useParams();
   const courseId = params?.id as string;
 
+  const { user } = useAppSelector((state) => state.auth);
+  const isStudent = user?.role === "student";
+
   const { data, isLoading, isError, error } = useGetCourseContentQuery(courseId);
   const [addQuestion, { isLoading: isAsking }] = useAddQuestionMutation();
+  // Progress only exists for students - an admin/instructor previewing a
+  // course has no enrollment record to track.
+  const { data: progressData } = useGetCourseProgressQuery(courseId, { skip: !isStudent });
+  const [updateLessonProgress, { isLoading: isMarking }] = useUpdateLessonProgressMutation();
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [questionText, setQuestionText] = useState("");
@@ -25,6 +37,18 @@ export default function CourseAccessPage() {
 
   const content = data?.content || [];
   const activeLesson = content[activeIndex];
+  const completedLessonIds: string[] = progressData?.progress?.completedLessonIds || [];
+  const completionPercentage = progressData?.progress?.completionPercentage || 0;
+  const isActiveLessonDone = activeLesson && completedLessonIds.includes(activeLesson._id);
+
+  const handleMarkComplete = () => {
+    if (!activeLesson) return;
+    updateLessonProgress({
+      courseId,
+      lessonId: activeLesson._id,
+      completed: !isActiveLessonDone,
+    });
+  };
 
   const handleAskQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,9 +88,24 @@ export default function CourseAccessPage() {
             <div>
               <VideoPlayer videoUrl={activeLesson.videoUrl} />
 
-              <h1 className="mt-6 font-display text-2xl text-ink dark:text-parchment">
-                {activeLesson.title}
-              </h1>
+              <div className="mt-6 flex items-center justify-between gap-4">
+                <h1 className="font-display text-2xl text-ink dark:text-parchment">
+                  {activeLesson.title}
+                </h1>
+                {isStudent && (
+                  <button
+                    onClick={handleMarkComplete}
+                    disabled={isMarking}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+                      isActiveLessonDone
+                        ? "bg-parchment-dark text-ink/70 dark:bg-ink-light dark:text-parchment/70"
+                        : "bg-mustard text-ink hover:bg-mustard-dark"
+                    }`}
+                  >
+                    {isActiveLessonDone ? "Completed ✓" : "Mark as complete"}
+                  </button>
+                )}
+              </div>
               <p className="mt-2 text-ink/70 dark:text-parchment/70">
                 {activeLesson.description}
               </p>
@@ -122,21 +161,39 @@ export default function CourseAccessPage() {
             </div>
 
             <aside>
-              <h2 className="font-display text-lg text-ink dark:text-parchment">
-                Lessons
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-lg text-ink dark:text-parchment">
+                  Lessons
+                </h2>
+                {isStudent && (
+                  <span className="text-sm text-ink/50 dark:text-parchment/50">
+                    {Math.round(completionPercentage)}%
+                  </span>
+                )}
+              </div>
+              {isStudent && (
+                <div className="mt-2 h-1.5 w-full rounded-full bg-parchment-dark dark:bg-ink">
+                  <div
+                    className="h-1.5 rounded-full bg-mustard"
+                    style={{ width: `${Math.min(100, Math.max(0, completionPercentage))}%` }}
+                  />
+                </div>
+              )}
               <ul className="mt-4 space-y-1">
                 {content.map((lesson: any, i: number) => (
                   <li key={lesson._id}>
                     <button
                       onClick={() => setActiveIndex(i)}
-                      className={`w-full border-l-2 px-3 py-2 text-left text-sm ${
+                      className={`flex w-full items-center justify-between border-l-2 px-3 py-2 text-left text-sm ${
                         i === activeIndex
                           ? "border-mustard bg-parchment-dark/50 font-medium text-ink dark:bg-ink-light dark:text-parchment"
                           : "border-transparent text-ink/70 hover:border-parchment-dark dark:text-parchment/70"
                       }`}
                     >
-                      {i + 1}. {lesson.title}
+                      <span>{i + 1}. {lesson.title}</span>
+                      {isStudent && completedLessonIds.includes(lesson._id) && (
+                        <span className="text-mustard-dark dark:text-mustard">✓</span>
+                      )}
                     </button>
                   </li>
                 ))}
