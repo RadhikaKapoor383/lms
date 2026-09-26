@@ -54,6 +54,7 @@ export default function EditCoursePage() {
         <CourseForm
           initialValues={{
             ...course,
+            category: course.category?._id || course.category || "",
             thumbnail: course.thumbnail?.url || "",
           }}
           onSubmit={handleSubmit}

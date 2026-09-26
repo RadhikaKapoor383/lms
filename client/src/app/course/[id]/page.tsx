@@ -58,7 +58,7 @@ export default function CourseDetailsPage() {
         {course && (
           <>
             <p className="text-sm uppercase tracking-wide text-clay">
-              {course.tags} · {course.level}
+              {course.category?.name} · {course.level}
             </p>
             <h1 className="mt-3 font-display text-4xl text-ink dark:text-parchment">
               {course.name}

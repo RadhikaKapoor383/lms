@@ -1,60 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Loader from "@/components/Loader";
 import {
-  useCreateLayoutMutation,
-  useEditLayoutMutation,
-  useGetLayoutByTypeQuery,
-} from "@/redux/features/layout/layoutApi";
+  useCreateCategoryMutation,
+  useDeleteCategoryMutation,
+  useGetCategoriesQuery,
+  useUpdateCategoryMutation,
+} from "@/redux/features/categories/categoriesApi";
 
 export default function AdminCategoriesPage() {
-  const { data, isLoading } = useGetLayoutByTypeQuery("Categories");
-  const [createLayout, { isLoading: isCreating }] = useCreateLayoutMutation();
-  const [editLayout, { isLoading: isEditing }] = useEditLayoutMutation();
+  const { data, isLoading } = useGetCategoriesQuery(undefined);
+  const [createCategory, { isLoading: isCreating }] = useCreateCategoryMutation();
+  const [updateCategory] = useUpdateCategoryMutation();
+  const [deleteCategory] = useDeleteCategoryMutation();
 
-  const [categories, setCategories] = useState<{ title: string }[]>([]);
-  const [saved, setSaved] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [error, setError] = useState("");
 
-  // Populate local state once the existing categories load
-  useEffect(() => {
-    if (data?.layout?.categories?.length) {
-      setCategories(data.layout.categories);
-    }
-  }, [data]);
+  const categories = data?.categories || [];
 
-  const updateCategory = (index: number, title: string) => {
-    setCategories((c) => {
-      const next = [...c];
-      next[index] = { title };
-      return next;
-    });
-    setSaved(false);
-  };
-
-  const addCategory = () => setCategories((c) => [...c, { title: "" }]);
-  const removeCategory = (index: number) =>
-    setCategories((c) => c.filter((_, i) => i !== index));
-
-  const handleSave = async () => {
+  const handleCreate = async () => {
     setError("");
-    setSaved(false);
-    const cleaned = categories.filter((c) => c.title.trim() !== "");
-
+    const name = newName.trim();
+    if (!name) return;
     try {
-      if (data?.layout?._id) {
-        await editLayout({ type: "Categories", categories: cleaned }).unwrap();
-      } else {
-        await createLayout({ type: "Categories", categories: cleaned }).unwrap();
-      }
-      setSaved(true);
+      await createCategory(name).unwrap();
+      setNewName("");
     } catch (err: any) {
-      setError(err?.data?.message || "Could not save categories");
+      setError(err?.data?.message || "Could not create the category");
     }
   };
 
-  const isSaving = isCreating || isEditing;
+  const startEdit = (id: string, name: string) => {
+    setEditingId(id);
+    setEditingName(name);
+  };
+
+  const saveEdit = async () => {
+    setError("");
+    const name = editingName.trim();
+    if (!editingId || !name) return;
+    try {
+      await updateCategory({ id: editingId, name }).unwrap();
+      setEditingId(null);
+    } catch (err: any) {
+      setError(err?.data?.message || "Could not rename the category");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setError("");
+    try {
+      await deleteCategory(id).unwrap();
+    } catch (err: any) {
+      setError(err?.data?.message || "Could not delete the category");
+    }
+  };
 
   return (
     <div>
@@ -66,42 +70,65 @@ export default function AdminCategoriesPage() {
       </p>
 
       {isLoading && <Loader />}
+      {error && <p className="mt-3 text-sm text-clay">{error}</p>}
 
       {!isLoading && (
         <div className="mt-8 max-w-md space-y-3">
-          {categories.map((c, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                value={c.title}
-                onChange={(e) => updateCategory(i, e.target.value)}
-                className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-                placeholder="e.g. Programming"
-              />
-              <button onClick={() => removeCategory(i)} className="px-3 text-clay">
-                Remove
-              </button>
+          {categories.map((c: any) => (
+            <div key={c._id} className="flex items-center gap-2">
+              {editingId === c._id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+                  />
+                  <button onClick={saveEdit} className="text-sm text-mustard-dark hover:underline dark:text-mustard">
+                    Save
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="px-2 text-sm text-ink/50 dark:text-parchment/50">
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="w-full border border-transparent px-4 py-2.5 text-ink dark:text-parchment">
+                    {c.name}
+                  </span>
+                  <button
+                    onClick={() => startEdit(c._id, c.name)}
+                    className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+                  >
+                    Rename
+                  </button>
+                  <button onClick={() => handleDelete(c._id)} className="px-2 text-sm text-clay">
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
           ))}
 
-          <button
-            onClick={addCategory}
-            className="text-sm text-mustard-dark hover:underline dark:text-mustard"
-          >
-            + Add category
-          </button>
-
-          {error && <p className="text-sm text-clay">{error}</p>}
-          {saved && (
-            <p className="text-sm text-ink-light dark:text-mustard">Saved.</p>
+          {categories.length === 0 && (
+            <p className="text-sm text-ink/60 dark:text-parchment/60">
+              No categories yet - add the first one below.
+            </p>
           )}
 
-          <div>
+          <div className="flex gap-2 pt-2">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Programming"
+              className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+            />
             <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="mt-2 rounded-full bg-mustard px-6 py-2.5 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+              onClick={handleCreate}
+              disabled={isCreating || !newName.trim()}
+              className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-50"
             >
-              {isSaving ? "Saving..." : "Save categories"}
+              Add
             </button>
           </div>
         </div>

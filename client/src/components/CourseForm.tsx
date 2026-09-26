@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useGetCategoriesQuery } from "@/redux/features/categories/categoriesApi";
 
 type Benefit = { title: string };
 type Link = { title: string; url: string };
@@ -18,7 +19,7 @@ export type CourseFormValues = {
   description: string;
   price: number;
   estimatedPrice: number;
-  tags: string;
+  category: string; // Category._id
   level: string;
   demoUrl: string;
   thumbnail: string; // base64 on create, existing URL on edit unless replaced
@@ -59,12 +60,15 @@ export default function CourseForm({
   // Instructors don't control status (admin approves), so their pages hide it
   showStatus?: boolean;
 }) {
+  const { data: categoriesData, isLoading: categoriesLoading } = useGetCategoriesQuery(undefined);
+  const categories = categoriesData?.categories || [];
+
   const [values, setValues] = useState<CourseFormValues>({
     name: initialValues?.name || "",
     description: initialValues?.description || "",
     price: initialValues?.price || 0,
     estimatedPrice: initialValues?.estimatedPrice || 0,
-    tags: initialValues?.tags || "Programming",
+    category: initialValues?.category || "",
     level: initialValues?.level || "Beginner",
     demoUrl: initialValues?.demoUrl || "",
     thumbnail: initialValues?.thumbnail || "",
@@ -227,14 +231,27 @@ export default function CourseForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Category / tag</label>
-            <input
+            <label className={labelClass}>Category</label>
+            <select
               required
               className={inputClass}
-              value={values.tags}
-              onChange={(e) => setValues((v) => ({ ...v, tags: e.target.value }))}
-              placeholder="Programming, Design, Marketing..."
-            />
+              value={values.category}
+              onChange={(e) => setValues((v) => ({ ...v, category: e.target.value }))}
+            >
+              <option value="" disabled>
+                {categoriesLoading ? "Loading..." : "Select a category"}
+              </option>
+              {categories.map((c: any) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {!categoriesLoading && categories.length === 0 && (
+              <p className="mt-1 text-xs text-clay">
+                No categories yet - ask an admin to add one.
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass}>Level</label>
