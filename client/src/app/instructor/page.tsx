@@ -79,7 +79,7 @@ export default function InstructorDashboardPage() {
                 </span>
               </div>
               <p className="text-sm text-ink/60 dark:text-parchment/60">
-                ${course.price} · {course.purchased || 0} enrolled · {course.tags}
+                ${course.price} · {course.purchased || 0} enrolled · {course.category?.name || "No category"}
               </p>
             </div>
             <Link

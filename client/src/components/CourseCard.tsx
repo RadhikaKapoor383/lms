@@ -8,7 +8,8 @@ const tagColors: Record<string, string> = {
 };
 
 export default function CourseCard({ course }: { course: any }) {
-  const tagColor = tagColors[course.tags] || "#D9A441";
+  const categoryName = course.category?.name || "";
+  const tagColor = tagColors[categoryName] || "#D9A441";
 
   return (
     <Link
@@ -18,7 +19,7 @@ export default function CourseCard({ course }: { course: any }) {
     >
       <div className="flex items-center justify-between px-5 pt-4 text-xs uppercase tracking-wide text-ink/50 dark:text-parchment/50">
         <span>{course.level}</span>
-        <span>{course.tags}</span>
+        <span>{categoryName}</span>
       </div>
 
       <div className="px-5 py-3">
