@@ -149,3 +149,24 @@ export const hasActiveEnrollment = async (studentId: string, courseId: string) =
   return !!found;
 };
 
+// Who may see a course's gated content (lessons, assignments, quizzes...):
+// admin: any course. instructor: their own course (to preview it).
+// everyone else: only with an active enrollment (checked in the DB, so a
+// student who was removed loses access immediately).
+export const hasCourseContentAccess = async (
+  role: string | undefined,
+  userId: string | undefined,
+  courseId: string
+) => {
+  if (role === "admin") return true;
+
+  if (role === "instructor") {
+    const owned = await CourseModel.findById(courseId).select("instructor");
+    if (!!owned?.instructor && String(owned.instructor) === String(userId)) {
+      return true;
+    }
+  }
+
+  return hasActiveEnrollment(String(userId), courseId);
+};
+
