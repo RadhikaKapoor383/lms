@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import Header from "@/components/Header";
@@ -74,6 +75,14 @@ export default function CourseAccessPage() {
     <>
       <Header />
       <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-4 flex justify-end">
+          <Link
+            href={`/course-access/${courseId}/assignments`}
+            className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+          >
+            View assignments →
+          </Link>
+        </div>
         {isLoading && <Loader />}
 
         {isError && (
