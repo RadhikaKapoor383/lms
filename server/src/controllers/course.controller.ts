@@ -16,6 +16,9 @@ import CategoryModel from "../models/category.model";
 import userModel from "../models/user.model";
 import EnrollmentModel from "../models/enrollment.model";
 import LessonProgressModel from "../models/lessonProgress.model";
+import ModuleModel from "../models/module.model";
+import LessonModel from "../models/lesson.model";
+import { syncModulesAndLessons, buildCourseDataArray } from "../services/courseContent.service";
 import { hasActiveEnrollment, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
 import { redis } from "../utils/redis";
@@ -85,6 +88,8 @@ export const uploadCourse = CatchAsyncError(
     try {
       const data = { ...req.body };
       const thumbnail = data.thumbnail;
+      const courseData = data.courseData;
+      delete data.courseData;
 
       if (req.user?.role === "instructor") {
         // Instructor: the course is always theirs and always starts as a Draft
@@ -123,6 +128,7 @@ export const uploadCourse = CatchAsyncError(
       }
 
       const course = await CourseModel.create(data);
+      await syncModulesAndLessons(course._id, courseData);
 
       logActivity(req, "course.create", `Created course "${course.name}"`, {
         courseId: course._id,
@@ -143,6 +149,9 @@ export const editCourse = CatchAsyncError(
     try {
       const data = { ...req.body };
       const thumbnail = data.thumbnail;
+      const hasCourseData = "courseData" in data;
+      const courseData = data.courseData;
+      delete data.courseData;
 
       if (req.user?.role === "instructor") {
         // Silently ignore locked fields (the shared CourseForm always sends "status")
@@ -190,6 +199,10 @@ export const editCourse = CatchAsyncError(
         { new: true }
       );
 
+      if (hasCourseData) {
+        await syncModulesAndLessons(courseId, courseData);
+      }
+
       await redis.del(courseId);
       await redis.del("allCourses");
 
@@ -198,6 +211,31 @@ export const editCourse = CatchAsyncError(
       });
 
       res.status(201).json({ success: true, course });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Get single course for editing (admin, or the instructor who owns it) -------------------
+// Unlike getSingleCourse/getAllCourses, this always includes full lesson
+// content plus each lesson's _id, since CourseForm needs those ids to keep a
+// lesson's identity (and its students' progress) stable across edits.
+
+export const getCourseForEdit = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const course = await CourseModel.findById(req.params.id)
+        .populate("category", "name")
+        .populate("instructor", "name email");
+
+      if (!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
+
+      const courseData = await buildCourseDataArray(course._id, false);
+
+      res.status(200).json({ success: true, course: { ...course.toObject(), courseData } });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -220,11 +258,7 @@ export const getSingleCourse = CatchAsyncError(
       const course = await CourseModel.findOne({
         _id: courseId,
         status: "Published",
-      })
-        .select(
-          "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
-        )
-        .populate("category", "name");
+      }).populate("category", "name");
 
       if (!course) {
         return next(new ErrorHandler("Course not found", 404));
@@ -251,11 +285,10 @@ export const getAllCourses = CatchAsyncError(
         return res.status(200).json({ success: true, courses });
       }
 
-      const courses = await CourseModel.find({ status: "Published" })
-        .select(
-          "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
-        )
-        .populate("category", "name");
+      const courses = await CourseModel.find({ status: "Published" }).populate(
+        "category",
+        "name"
+      );
 
       await redis.set("allCourses", JSON.stringify(courses), "EX", 604800); // 7 days
 
@@ -267,6 +300,27 @@ export const getAllCourses = CatchAsyncError(
 );
 
 // ------------------- Get course content (purchase-gated) -------------------
+
+// ------------------- Who may see a course's lesson content -------------------
+// admin: any course. instructor: their own course (to preview it).
+// everyone else: only with an active enrollment (checked in the DB, so a
+// student who was removed loses access immediately).
+const hasCourseContentAccess = async (
+  role: string | undefined,
+  userId: string | undefined,
+  courseId: string
+) => {
+  if (role === "admin") return true;
+
+  if (role === "instructor") {
+    const owned = await CourseModel.findById(courseId).select("instructor");
+    if (!!owned?.instructor && String(owned.instructor) === String(userId)) {
+      return true;
+    }
+  }
+
+  return hasActiveEnrollment(String(userId), courseId);
+};
 
 export const getCourseByUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -283,16 +337,7 @@ export const getCourseByUser = CatchAsyncError(
       //  - instructor: their own course (to preview it)
       //  - student: only with an active enrollment (checked in the DB, so a
       //    student who was removed loses access immediately)
-      let allowed = role === "admin";
-
-      if (!allowed && role === "instructor") {
-        const owned = await CourseModel.findById(courseId).select("instructor");
-        allowed = !!owned?.instructor && String(owned.instructor) === String(req.user?._id);
-      }
-
-      if (!allowed) {
-        allowed = await hasActiveEnrollment(String(req.user?._id), courseId);
-      }
+      const allowed = await hasCourseContentAccess(role, String(req.user?._id), courseId);
 
       if (!allowed) {
         return next(
@@ -300,8 +345,7 @@ export const getCourseByUser = CatchAsyncError(
         );
       }
 
-      const course = await CourseModel.findById(courseId);
-      const content = course?.courseData;
+      const content = await buildCourseDataArray(courseId, false);
 
       res.status(200).json({ success: true, content });
     } catch (error: any) {
@@ -324,17 +368,20 @@ export const addQuestion = CatchAsyncError(
       const { question, courseId, contentId } =
         req.body as IAddQuestionData;
 
-      const course = await CourseModel.findById(courseId);
-
       if (!mongoose.Types.ObjectId.isValid(contentId)) {
         return next(new ErrorHandler("Invalid content id", 400));
       }
 
-      const courseContent = course?.courseData?.find((item: any) =>
-        item._id.equals(contentId)
-      );
+      const allowed = await hasCourseContentAccess(req.user?.role, String(req.user?._id), courseId);
+      if (!allowed) {
+        return next(
+          new ErrorHandler("You are not eligible to access this course", 404)
+        );
+      }
 
-      if (!courseContent) {
+      const lesson = await LessonModel.findOne({ _id: contentId, course: courseId });
+
+      if (!lesson) {
         return next(new ErrorHandler("Invalid content id", 400));
       }
 
@@ -344,17 +391,16 @@ export const addQuestion = CatchAsyncError(
         questionReplies: [],
       };
 
-      courseContent.questions.push(newQuestion);
+      lesson.questions.push(newQuestion);
+      await lesson.save();
 
       await NotificationModel.create({
         userId: req.user?._id,
         title: "New question received",
-        message: `You have a new question in ${courseContent.title}`,
+        message: `You have a new question in ${lesson.title}`,
       });
 
-      await course?.save();
-
-      res.status(200).json({ success: true, course });
+      res.status(200).json({ success: true });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -376,21 +422,17 @@ export const addAnswer = CatchAsyncError(
       const { answer, courseId, contentId, questionId } =
         req.body as IAddAnswerData;
 
-      const course = await CourseModel.findById(courseId);
-
       if (!mongoose.Types.ObjectId.isValid(contentId)) {
         return next(new ErrorHandler("Invalid content id", 400));
       }
 
-      const courseContent = course?.courseData?.find((item: any) =>
-        item._id.equals(contentId)
-      );
+      const lesson = await LessonModel.findOne({ _id: contentId, course: courseId });
 
-      if (!courseContent) {
+      if (!lesson) {
         return next(new ErrorHandler("Invalid content id", 400));
       }
 
-      const question = courseContent.questions.find((item: any) =>
+      const question = lesson.questions.find((item: any) =>
         item._id.equals(questionId)
       );
 
@@ -401,20 +443,20 @@ export const addAnswer = CatchAsyncError(
       const newAnswer: any = { user: req.user, answer };
       question.questionReplies.push(newAnswer);
 
-      await course?.save();
+      await lesson.save();
 
       if (req.user?._id === (question.user as any)._id) {
         // asker is replying to their own question - no notification needed
         await NotificationModel.create({
           userId: req.user?._id,
           title: "New question reply received",
-          message: `You have a new question reply in ${courseContent.title}`,
+          message: `You have a new question reply in ${lesson.title}`,
         });
       } else {
         // someone else (e.g. admin) answered - email the original asker
         const data = {
           name: (question.user as any).name,
-          title: courseContent.title,
+          title: lesson.title,
         };
 
         try {
@@ -429,7 +471,7 @@ export const addAnswer = CatchAsyncError(
         }
       }
 
-      res.status(200).json({ success: true, course });
+      res.status(200).json({ success: true });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -554,6 +596,8 @@ export const deleteCourse = CatchAsyncError(
       // Clean up everything that pointed at this course
       await EnrollmentModel.deleteMany({ course: id });
       await LessonProgressModel.deleteMany({ course: id });
+      await LessonModel.deleteMany({ course: id });
+      await ModuleModel.deleteMany({ course: id });
       await userModel.updateMany(
         { "courses.courseId": id },
         { $pull: { courses: { courseId: id } } } as any
