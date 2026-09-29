@@ -6,7 +6,7 @@ import Loader from "@/components/Loader";
 import CourseForm, { CourseFormValues } from "@/components/CourseForm";
 import {
   useEditCourseMutation,
-  useGetInstructorCoursesQuery,
+  useGetCourseForEditQuery,
 } from "@/redux/features/courses/coursesApi";
 
 export default function InstructorEditCoursePage() {
@@ -14,13 +14,13 @@ export default function InstructorEditCoursePage() {
   const router = useRouter();
   const id = params?.id as string;
 
-  // Only this instructor's own courses come back, so a course that isn't
-  // theirs simply won't be found here (the server also blocks the edit itself).
-  const { data, isLoading } = useGetInstructorCoursesQuery(undefined);
+  // The server (authorizeCourseOwner) refuses this if the course isn't
+  // this instructor's own, which surfaces here as isError.
+  const { data, isLoading, isError } = useGetCourseForEditQuery(id);
   const [editCourse, { isLoading: isSaving }] = useEditCourseMutation();
   const [error, setError] = useState("");
 
-  const course = data?.courses?.find((c: any) => c._id === id);
+  const course = data?.course;
 
   const handleSubmit = async (values: CourseFormValues) => {
     setError("");
@@ -37,7 +37,7 @@ export default function InstructorEditCoursePage() {
   };
 
   if (isLoading) return <Loader />;
-  if (!course) {
+  if (isError || !course) {
     return <p className="text-ink/60 dark:text-parchment/60">Course not found.</p>;
   }
 
