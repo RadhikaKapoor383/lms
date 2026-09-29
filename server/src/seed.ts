@@ -6,6 +6,7 @@ import connectDB from "./utils/db";
 import userModel from "./models/user.model";
 import CourseModel from "./models/course.model";
 import CategoryModel from "./models/category.model";
+import { syncModulesAndLessons } from "./services/courseContent.service";
 
 const ADMIN_EMAIL = "admin@ledger.dev";
 const ADMIN_PASSWORD = "admin1234";
@@ -197,7 +198,13 @@ const seed = async () => {
       }
       continue;
     }
-    await CourseModel.create({ ...courseFields, category: category._id, instructor: owner });
+    const { courseData, ...courseFieldsNoLessons } = courseFields;
+    const newCourse = await CourseModel.create({
+      ...courseFieldsNoLessons,
+      category: category._id,
+      instructor: owner,
+    });
+    await syncModulesAndLessons(newCourse._id, courseData);
     console.log(`Created course: ${course.name}`);
   }
 

@@ -1,8 +1,7 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 
 // One document per (student, lesson) the student has completed.
-// The course's lessons live inside Course.courseData, so lessonId is that
-// sub-document's _id.
+// lessonId points at a Lesson document (see lesson.model.ts).
 export interface ILessonProgress extends Document {
   student: mongoose.Types.ObjectId;
   course: mongoose.Types.ObjectId;
