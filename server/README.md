@@ -44,8 +44,8 @@ Routes under `/admin/*` and anything using `authorizeRoles("admin")` require the
 
 ## What's not built yet (next steps)
 
-- Payment gateway integration (Stripe) inside `createOrder` — `payment_info` is currently just stored as-is
-- Rate limiting / request throttling
-- Input validation layer (e.g. `zod` or `express-validator`) — right now validation relies on Mongoose schema rules
-- Seed script for creating the first admin user
-- The Next.js frontend (not started)
+- Payment gateway integration (Stripe) inside `createOrder` — `payment_info` is currently just stored as-is.
+- Rate limiting / request throttling.
+- Input validation layer (e.g. `zod` or `express-validator`) — right now validation relies on Mongoose schema rules.
+- Seed script for creating the first admin user.
+- The Next.js frontend (not started).
