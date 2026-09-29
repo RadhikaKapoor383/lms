@@ -16,6 +16,7 @@ import announcementRouter from "./routes/announcement.route";
 import auditLogRouter from "./routes/auditLog.route";
 import enrollmentRouter from "./routes/enrollment.route";
 import categoryRouter from "./routes/category.route";
+import assignmentRouter from "./routes/assignment.route";
 
 // body parser
 app.use(express.json({ limit: "50mb" }));
@@ -43,7 +44,8 @@ app.use(
   announcementRouter,
   auditLogRouter,
   enrollmentRouter,
-  categoryRouter
+  categoryRouter,
+  assignmentRouter
 );
 
 // testing route
