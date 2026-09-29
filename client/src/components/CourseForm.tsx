@@ -6,6 +6,12 @@ import { useGetCategoriesQuery } from "@/redux/features/categories/categoriesApi
 type Benefit = { title: string };
 type Link = { title: string; url: string };
 type Lesson = {
+  // Present when this lesson already exists on the server - keep it as-is
+  // when editing so the server can match it back to the same Lesson document
+  // (and the progress students have already recorded against it). Omitted
+  // for a lesson the instructor just added, which tells the server to create
+  // a fresh one.
+  _id?: string;
   title: string;
   description: string;
   videoUrl: string;

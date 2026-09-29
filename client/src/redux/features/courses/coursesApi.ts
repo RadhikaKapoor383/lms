@@ -27,6 +27,19 @@ export const coursesApi = apiSlice.injectEndpoints({
       providesTags: ["Courses"],
     }),
 
+    // Full course + lessons (with each lesson's _id) for the edit form.
+    // Separate from getAdminAllCourses/getInstructorCourses because those are
+    // list views and shouldn't have to fetch every course's lesson content
+    // just so one of them might get opened for editing.
+    getCourseForEdit: builder.query({
+      query: (id: string) => ({
+        url: `edit-course/${id}`,
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Courses"],
+    }),
+
     addQuestion: builder.mutation({
       query: ({ question, courseId, contentId }) => ({
         url: "add-question",
@@ -104,6 +117,7 @@ export const {
   useGetAllCoursesQuery,
   useGetCourseDetailsQuery,
   useGetCourseContentQuery,
+  useGetCourseForEditQuery,
   useAddQuestionMutation,
   useGetAdminAllCoursesQuery,
   useGetInstructorCoursesQuery,

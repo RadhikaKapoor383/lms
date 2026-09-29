@@ -19,19 +19,6 @@ export interface ILink extends Document {
   url: string;
 }
 
-export interface ICourseData extends Document {
-  title: string;
-  description: string;
-  videoUrl: string;
-  videoThumbnail: object;
-  videoSection: string;
-  videoLength: number;
-  videoPlayer: string;
-  links: ILink[];
-  suggestion: string;
-  questions: IComment[];
-}
-
 // Who can put a student into a course:
 //   open   - students enroll themselves (free) or buy it (paid)
 //   manual - only the instructor/admin enrolls students (private course)
@@ -59,7 +46,6 @@ export interface ICourse extends Document {
   benefits: { title: string }[];
   prerequisites: { title: string }[];
   reviews: IReview[];
-  courseData: ICourseData[];
   ratings?: number;
   purchased?: number;
   status: "Draft" | "Pending Approval" | "Published" | "Rejected" | "Archived";
@@ -82,28 +68,15 @@ const reviewSchema = new Schema<IReview>({
   commentReplies: [Object],
 });
 
-const linkSchema = new Schema<ILink>({
+export const linkSchema = new Schema<ILink>({
   title: String,
   url: String,
 });
 
-const commentSchema = new Schema<IComment>({
+export const commentSchema = new Schema<IComment>({
   user: Object,
   question: String,
   questionReplies: [Object],
-});
-
-const courseDataSchema = new Schema<ICourseData>({
-  videoUrl: String,
-  videoThumbnail: Object,
-  title: String,
-  videoSection: String,
-  description: String,
-  videoLength: Number,
-  videoPlayer: String,
-  links: [linkSchema],
-  suggestion: String,
-  questions: [commentSchema],
 });
 
 const courseSchema = new Schema<ICourse>(
@@ -123,7 +96,6 @@ const courseSchema = new Schema<ICourse>(
     benefits: [{ title: String }],
     prerequisites: [{ title: String }],
     reviews: [reviewSchema],
-    courseData: [courseDataSchema],
     ratings: { type: Number, default: 0 },
     purchased: { type: Number, default: 0 },
     status: {
