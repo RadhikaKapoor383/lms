@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
 import RoleProtected from "@/components/RoleProtected";
 import { useGetMyEnrollmentsQuery } from "@/redux/features/enrollment/enrollmentApi";
+import { useGetMyAssignmentsQuery } from "@/redux/features/assignments/assignmentsApi";
 import { useAppSelector } from "@/hooks/redux";
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -23,6 +24,11 @@ function StudentDashboardContent() {
   const { user } = useAppSelector((state) => state.auth);
   const { data, isLoading, isError } = useGetMyEnrollmentsQuery(undefined);
   const enrollments = data?.enrollments || [];
+
+  const { data: assignmentsData } = useGetMyAssignmentsQuery(undefined);
+  const upcomingDeadlines = (assignmentsData?.assignments || [])
+    .filter((a: any) => !a.mySubmission && new Date(a.deadline) > new Date())
+    .slice(0, 5);
 
   const inProgress = enrollments.filter(
     (e: any) => e.status === "active" && e.completionPercentage < 100
@@ -63,6 +69,31 @@ function StudentDashboardContent() {
             </p>
           </div>
         </div>
+
+        {upcomingDeadlines.length > 0 && (
+          <div className="mt-10">
+            <h2 className="font-display text-2xl text-ink dark:text-parchment">
+              Upcoming deadlines
+            </h2>
+            <div className="mt-4 divide-y divide-parchment-dark dark:divide-ink-light">
+              {upcomingDeadlines.map((a: any) => (
+                <Link
+                  key={a._id}
+                  href={`/course-access/${a.course._id}/assignments`}
+                  className="flex items-center justify-between py-3 hover:opacity-90"
+                >
+                  <div>
+                    <p className="text-ink dark:text-parchment">{a.title}</p>
+                    <p className="text-sm text-ink/60 dark:text-parchment/60">{a.course?.name}</p>
+                  </div>
+                  <span className="text-sm text-ink/50 dark:text-parchment/50">
+                    {new Date(a.deadline).toLocaleDateString()}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-10 flex items-center justify-between">
           <h2 className="font-display text-2xl text-ink dark:text-parchment">
