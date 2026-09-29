@@ -6,7 +6,7 @@ import Loader from "@/components/Loader";
 import CourseForm, { CourseFormValues } from "@/components/CourseForm";
 import {
   useEditCourseMutation,
-  useGetAdminAllCoursesQuery,
+  useGetCourseForEditQuery,
 } from "@/redux/features/courses/coursesApi";
 
 export default function EditCoursePage() {
@@ -14,12 +14,11 @@ export default function EditCoursePage() {
   const router = useRouter();
   const id = params?.id as string;
 
-  // Reuses the admin list query (cached) rather than adding another endpoint
-  const { data, isLoading } = useGetAdminAllCoursesQuery(undefined);
+  const { data, isLoading, isError } = useGetCourseForEditQuery(id);
   const [editCourse, { isLoading: isSaving }] = useEditCourseMutation();
   const [error, setError] = useState("");
 
-  const course = data?.courses?.find((c: any) => c._id === id);
+  const course = data?.course;
 
   const handleSubmit = async (values: CourseFormValues) => {
     setError("");
@@ -38,7 +37,7 @@ export default function EditCoursePage() {
   };
 
   if (isLoading) return <Loader />;
-  if (!course) {
+  if (isError || !course) {
     return (
       <p className="text-ink/60 dark:text-parchment/60">Course not found.</p>
     );
