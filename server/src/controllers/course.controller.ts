@@ -18,8 +18,10 @@ import EnrollmentModel from "../models/enrollment.model";
 import LessonProgressModel from "../models/lessonProgress.model";
 import ModuleModel from "../models/module.model";
 import LessonModel from "../models/lesson.model";
+import AssignmentModel from "../models/assignment.model";
+import AssignmentSubmissionModel from "../models/assignmentSubmission.model";
 import { syncModulesAndLessons, buildCourseDataArray } from "../services/courseContent.service";
-import { hasActiveEnrollment, isObjectId } from "../services/enrollment.service";
+import { hasCourseContentAccess, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
@@ -301,26 +303,8 @@ export const getAllCourses = CatchAsyncError(
 
 // ------------------- Get course content (purchase-gated) -------------------
 
-// ------------------- Who may see a course's lesson content -------------------
-// admin: any course. instructor: their own course (to preview it).
-// everyone else: only with an active enrollment (checked in the DB, so a
-// student who was removed loses access immediately).
-const hasCourseContentAccess = async (
-  role: string | undefined,
-  userId: string | undefined,
-  courseId: string
-) => {
-  if (role === "admin") return true;
-
-  if (role === "instructor") {
-    const owned = await CourseModel.findById(courseId).select("instructor");
-    if (!!owned?.instructor && String(owned.instructor) === String(userId)) {
-      return true;
-    }
-  }
-
-  return hasActiveEnrollment(String(userId), courseId);
-};
+// (hasCourseContentAccess now lives in enrollment.service.ts, alongside the
+// other access/enrollment logic it depends on - imported above.)
 
 export const getCourseByUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -597,6 +581,8 @@ export const deleteCourse = CatchAsyncError(
       await EnrollmentModel.deleteMany({ course: id });
       await LessonProgressModel.deleteMany({ course: id });
       await LessonModel.deleteMany({ course: id });
+      await AssignmentModel.deleteMany({ course: id });
+      await AssignmentSubmissionModel.deleteMany({ course: id });
       await ModuleModel.deleteMany({ course: id });
       await userModel.updateMany(
         { "courses.courseId": id },

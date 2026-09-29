@@ -5,6 +5,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 import { redis } from "../utils/redis";
 import mongoose from "mongoose";
 import CourseModel from "../models/course.model";
+import AssignmentModel from "../models/assignment.model";
 
 export const isAuthenticated = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -78,6 +79,37 @@ export const authorizeCourseOwner = CatchAsyncError(
     if (!isOwner) {
       return next(
         new ErrorHandler("You can only manage your own courses", 403)
+      );
+    }
+
+    next();
+  }
+);
+
+// Same idea as authorizeCourseOwner, but for a route keyed by an assignment's
+// own :id (creating an assignment for a course still goes through
+// authorizeCourseOwner - this is for editing/deleting/grading an assignment
+// that already exists).
+export const authorizeAssignmentOwner = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === "admin") {
+      return next();
+    }
+
+    const assignmentId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+      return next(new ErrorHandler("Invalid assignment id", 400));
+    }
+
+    const assignment = await AssignmentModel.findById(assignmentId).select("instructor");
+    if (!assignment) {
+      return next(new ErrorHandler("Assignment not found", 404));
+    }
+
+    const isOwner = String(assignment.instructor) === String(req.user?._id);
+    if (!isOwner) {
+      return next(
+        new ErrorHandler("You can only manage your own assignments", 403)
       );
     }
 
