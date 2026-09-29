@@ -13,6 +13,7 @@ import {
   editCourse,
   getAdminAllCourses,
   getAllCourses,
+  getCourseForEdit,
   getInstructorCourses,
   getCourseByUser,
   getSingleCourse,
@@ -29,6 +30,14 @@ courseRouter.post(
   isAuthenticated,
   authorizeRoles("admin", "instructor"),
   uploadCourse
+);
+
+courseRouter.get(
+  "/edit-course/:id",
+  isAuthenticated,
+  authorizeRoles("admin", "instructor"),
+  authorizeCourseOwner,
+  getCourseForEdit
 );
 
 courseRouter.put(

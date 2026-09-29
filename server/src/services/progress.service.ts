@@ -1,4 +1,5 @@
 import CourseModel from "../models/course.model";
+import LessonModel from "../models/lesson.model";
 import EnrollmentModel from "../models/enrollment.model";
 import LessonProgressModel from "../models/lessonProgress.model";
 import NotificationModel from "../models/notification.model";
@@ -33,8 +34,9 @@ export const getProgress = async (
   courseId: string
 ): Promise<IProgressSummary> => {
   const enrollment = await getActiveEnrollment(studentId, courseId);
-  const course = await CourseModel.findById(courseId).select("courseData._id");
-  const lessonIds = (course?.courseData || []).map((l: any) => l._id);
+  const lessonIds = (await LessonModel.find({ course: courseId }).select("_id")).map(
+    (l) => l._id
+  );
 
   const done = await LessonProgressModel.find({
     student: studentId,
@@ -59,12 +61,14 @@ export const setLessonCompleted = async (
 ): Promise<IProgressSummary> => {
   const enrollment = await getActiveEnrollment(studentId, courseId);
 
-  const course = await CourseModel.findById(courseId).select("name courseData._id");
+  const course = await CourseModel.findById(courseId).select("name");
   if (!course) {
     throw new ErrorHandler("Course not found", 404);
   }
 
-  const lessonIds = course.courseData.map((l: any) => String(l._id));
+  const lessonIds = (await LessonModel.find({ course: courseId }).select("_id")).map((l) =>
+    String(l._id)
+  );
   if (!isObjectId(lessonId) || !lessonIds.includes(lessonId)) {
     throw new ErrorHandler("Lesson not found in this course", 404);
   }
