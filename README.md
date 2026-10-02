@@ -204,7 +204,3 @@ The server mounts routes under `/api/v1` for:
 ## License
 
 This project is for educational and academic use.
-
-## Contributors
-
-This LMS was developed as part of the EAD / project coursework and is intended as a learning-oriented full-stack application.
