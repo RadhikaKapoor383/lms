@@ -6,14 +6,14 @@ A full-stack learning management system built with Next.js on the frontend and E
 
 This project includes:
 
-- Student-facing course browsing and enrollment flows
-- Instructor dashboard for course and content management
-- Admin dashboard for platform oversight and analytics
-- Role-based authentication and access control
-- Course, order, announcement, and notification APIs
-- Redis-backed caching support and MongoDB persistence
-- Email-based account activation and notifications
-- Cloudinary integration for media uploads
+- Student-facing course browsing and enrollment flows.
+- Instructor dashboard for course and content management.
+- Admin dashboard for platform oversight and analytics.
+- Role-based authentication and access control.
+- Course, order, announcement, and notification APIs.
+- Redis-backed caching support and MongoDB persistence.
+- Email-based account activation and notifications.
+- Cloudinary integration for media uploads.
 
 ## Tech Stack
 
