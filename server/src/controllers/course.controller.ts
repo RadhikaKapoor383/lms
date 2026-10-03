@@ -20,6 +20,8 @@ import ModuleModel from "../models/module.model";
 import LessonModel from "../models/lesson.model";
 import AssignmentModel from "../models/assignment.model";
 import AssignmentSubmissionModel from "../models/assignmentSubmission.model";
+import QuizModel from "../models/quiz.model";
+import QuizAttemptModel from "../models/quizAttempt.model";
 import { syncModulesAndLessons, buildCourseDataArray } from "../services/courseContent.service";
 import { hasCourseContentAccess, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
@@ -583,6 +585,8 @@ export const deleteCourse = CatchAsyncError(
       await LessonModel.deleteMany({ course: id });
       await AssignmentModel.deleteMany({ course: id });
       await AssignmentSubmissionModel.deleteMany({ course: id });
+      await QuizModel.deleteMany({ course: id });
+      await QuizAttemptModel.deleteMany({ course: id });
       await ModuleModel.deleteMany({ course: id });
       await userModel.updateMany(
         { "courses.courseId": id },

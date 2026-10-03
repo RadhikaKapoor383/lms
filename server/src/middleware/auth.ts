@@ -6,6 +6,7 @@ import { redis } from "../utils/redis";
 import mongoose from "mongoose";
 import CourseModel from "../models/course.model";
 import AssignmentModel from "../models/assignment.model";
+import QuizModel from "../models/quiz.model";
 
 export const isAuthenticated = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -111,6 +112,32 @@ export const authorizeAssignmentOwner = CatchAsyncError(
       return next(
         new ErrorHandler("You can only manage your own assignments", 403)
       );
+    }
+
+    next();
+  }
+);
+
+// Same idea as authorizeAssignmentOwner, for a route keyed by a quiz's own :id.
+export const authorizeQuizOwner = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === "admin") {
+      return next();
+    }
+
+    const quizId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(quizId)) {
+      return next(new ErrorHandler("Invalid quiz id", 400));
+    }
+
+    const quiz = await QuizModel.findById(quizId).select("instructor");
+    if (!quiz) {
+      return next(new ErrorHandler("Quiz not found", 404));
+    }
+
+    const isOwner = String(quiz.instructor) === String(req.user?._id);
+    if (!isOwner) {
+      return next(new ErrorHandler("You can only manage your own quizzes", 403));
     }
 
     next();
