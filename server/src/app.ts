@@ -17,6 +17,7 @@ import auditLogRouter from "./routes/auditLog.route";
 import enrollmentRouter from "./routes/enrollment.route";
 import categoryRouter from "./routes/category.route";
 import assignmentRouter from "./routes/assignment.route";
+import quizRouter from "./routes/quiz.route";
 
 // body parser
 app.use(express.json({ limit: "50mb" }));
@@ -45,7 +46,8 @@ app.use(
   auditLogRouter,
   enrollmentRouter,
   categoryRouter,
-  assignmentRouter
+  assignmentRouter,
+  quizRouter
 );
 
 // testing route
