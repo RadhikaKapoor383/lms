@@ -101,6 +101,12 @@ export default function InstructorDashboardPage() {
               >
                 Assignments
               </Link>
+              <Link
+                href={`/instructor/courses/${course._id}/quizzes`}
+                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Quizzes
+              </Link>
             </div>
           </div>
         ))}
