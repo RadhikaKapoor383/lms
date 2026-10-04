@@ -104,9 +104,18 @@ export default function AllCoursesPage() {
             <div className="flex items-center gap-4">
               <select
                 value={course.status}
-                onChange={(e) =>
-                  updateStatus({ id: course._id, status: e.target.value })
-                }
+                onChange={(e) => {
+                  const status = e.target.value;
+                  if (status === "Rejected") {
+                    // the reason goes to the instructor in their notification;
+                    // Cancel (null) aborts the change
+                    const reason = window.prompt("Reason for rejecting (the instructor will see this):");
+                    if (reason === null) return;
+                    updateStatus({ id: course._id, status, reason });
+                    return;
+                  }
+                  updateStatus({ id: course._id, status });
+                }}
                 className="border border-parchment-dark bg-transparent px-2 py-1 text-sm dark:border-ink-light"
               >
                 {COURSE_STATUSES.map((s) => (
