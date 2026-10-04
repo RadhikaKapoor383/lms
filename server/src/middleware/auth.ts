@@ -35,6 +35,8 @@ export const isAuthenticated = CatchAsyncError(
     }
 
     req.user = JSON.parse(user);
+    // sessions cached before the toJSON fix may still hold the hash
+    delete (req.user as any).password;
     next();
   }
 );

@@ -14,6 +14,9 @@ export interface IAssignment extends Document {
   // If false, a student can only submit once - a second attempt is rejected
   // rather than silently overwriting their graded work.
   allowResubmission: boolean;
+  // Set once the "due within 24h" reminder went out, so it is sent only once.
+  // Reset when the deadline is changed.
+  deadlineReminderSent?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +31,7 @@ const assignmentSchema = new Schema<IAssignment>(
     maxMarks: { type: Number, required: true, min: 1 },
     deadline: { type: Date, required: true },
     allowResubmission: { type: Boolean, default: false },
+    deadlineReminderSent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

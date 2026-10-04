@@ -11,6 +11,7 @@ export interface IReview extends Document {
   user: IUser;
   rating: number;
   comment: string;
+  createdAt?: Date;
   commentReplies: IComment[];
 }
 
@@ -65,6 +66,7 @@ const reviewSchema = new Schema<IReview>({
   user: Object,
   rating: { type: Number, default: 0 },
   comment: String,
+  createdAt: { type: Date, default: Date.now },
   commentReplies: [Object],
 });
 
