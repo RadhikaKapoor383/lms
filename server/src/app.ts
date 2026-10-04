@@ -18,6 +18,9 @@ import enrollmentRouter from "./routes/enrollment.route";
 import categoryRouter from "./routes/category.route";
 import assignmentRouter from "./routes/assignment.route";
 import quizRouter from "./routes/quiz.route";
+import certificateRouter from "./routes/certificate.route";
+import discussionRouter from "./routes/discussion.route";
+import reviewRouter from "./routes/review.route";
 
 // body parser
 app.use(express.json({ limit: "50mb" }));
@@ -47,7 +50,10 @@ app.use(
   enrollmentRouter,
   categoryRouter,
   assignmentRouter,
-  quizRouter
+  quizRouter,
+  certificateRouter,
+  discussionRouter,
+  reviewRouter
 );
 
 // testing route
