@@ -9,6 +9,8 @@ const links = [
   { label: "All courses", href: "/admin/all-courses" },
   { label: "Categories", href: "/admin/categories" },
   { label: "Enrollments", href: "/admin/enrollments" },
+  { label: "Certificates", href: "/admin/certificates" },
+  { label: "Reviews", href: "/admin/reviews" },
   { label: "Announcements", href: "/admin/announcements" },
   { label: "Users", href: "/admin/users" },
   { label: "Orders", href: "/admin/orders" },
