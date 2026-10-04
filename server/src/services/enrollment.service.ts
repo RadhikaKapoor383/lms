@@ -102,6 +102,7 @@ export const createEnrollment = async ({
     userId: String(studentId),
     title: "Enrolled",
     message: `You are now enrolled in ${course.name}`,
+    link: `/course-access/${courseId}`,
   });
 
   return { enrollment, course, student };
