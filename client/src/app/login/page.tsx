@@ -76,6 +76,14 @@ export default function LoginPage() {
             {formik.touched.password && formik.errors.password && (
               <p className="mt-1 text-sm text-clay">{formik.errors.password}</p>
             )}
+            <p className="mt-2 text-right text-sm">
+              <Link
+                href="/forgot-password"
+                className="text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Forgot password?
+              </Link>
+            </p>
           </div>
 
           {serverError && <p className="text-sm text-clay">{serverError}</p>}
