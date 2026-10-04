@@ -25,6 +25,8 @@ import QuizAttemptModel from "../models/quizAttempt.model";
 import { syncModulesAndLessons, buildCourseDataArray } from "../services/courseContent.service";
 import { hasCourseContentAccess, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
+import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
+import { toPublicCourse } from "../utils/publicProfile";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
 import { logActivity } from "../utils/auditLog";
@@ -204,7 +206,23 @@ export const editCourse = CatchAsyncError(
       );
 
       if (hasCourseData) {
+        const lessonsBefore = await LessonModel.countDocuments({ course: courseId });
         await syncModulesAndLessons(courseId, courseData);
+        const lessonsAfter = await LessonModel.countDocuments({ course: courseId });
+
+        // New content in a live course: tell the students already learning in
+        // it. A draft/pending course has no students yet, and editing or
+        // reordering existing lessons shouldn't notify anyone - only a rise in
+        // the lesson count does.
+        if (course?.status === "Published" && lessonsAfter > lessonsBefore) {
+          const added = lessonsAfter - lessonsBefore;
+          await notifyCourseStudents(
+            courseId,
+            "New lessons added",
+            `${added} new lesson${added === 1 ? "" : "s"} added to ${course.name}`,
+            `/course-access/${courseId}`
+          );
+        }
       }
 
       await redis.del(courseId);
@@ -254,20 +272,23 @@ export const getSingleCourse = CatchAsyncError(
       const courseId = req.params.id;
       const isCacheExist = await redis.get(courseId);
 
+      // toPublicCourse strips reviewer emails etc. It also runs on the cached
+      // copy, because entries cached before this fix still hold the raw data.
       if (isCacheExist) {
-        const course = JSON.parse(isCacheExist);
+        const course = toPublicCourse(JSON.parse(isCacheExist));
         return res.status(200).json({ success: true, course });
       }
 
-      const course = await CourseModel.findOne({
+      const found = await CourseModel.findOne({
         _id: courseId,
         status: "Published",
       }).populate("category", "name");
 
-      if (!course) {
+      if (!found) {
         return next(new ErrorHandler("Course not found", 404));
       }
 
+      const course = toPublicCourse(found);
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7 days
 
       res.status(200).json({ success: true, course });
@@ -285,14 +306,15 @@ export const getAllCourses = CatchAsyncError(
       const isCacheExist = await redis.get("allCourses");
 
       if (isCacheExist) {
-        const courses = JSON.parse(isCacheExist);
+        const courses = JSON.parse(isCacheExist).map(toPublicCourse);
         return res.status(200).json({ success: true, courses });
       }
 
-      const courses = await CourseModel.find({ status: "Published" }).populate(
+      const found = await CourseModel.find({ status: "Published" }).populate(
         "category",
         "name"
       );
+      const courses = found.map(toPublicCourse);
 
       await redis.set("allCourses", JSON.stringify(courses), "EX", 604800); // 7 days
 
@@ -380,11 +402,21 @@ export const addQuestion = CatchAsyncError(
       lesson.questions.push(newQuestion);
       await lesson.save();
 
-      await NotificationModel.create({
-        userId: req.user?._id,
-        title: "New question received",
-        message: `You have a new question in ${lesson.title}`,
-      });
+      // Tell the course staff - not the person who just asked (this used to
+      // notify the asker about their own question).
+      const askedIn = await CourseModel.findById(courseId).select("instructor");
+      let staffIds: string[];
+      if (askedIn?.instructor) {
+        staffIds = [String(askedIn.instructor)];
+      } else {
+        staffIds = (await userModel.find({ role: "admin" }).select("_id")).map((a) => String(a._id));
+      }
+      await notifyUsers(
+        staffIds.filter((id) => id !== String(req.user?._id)),
+        "New question received",
+        `${req.user?.name} asked a question in ${lesson.title}`,
+        `/course-access/${courseId}`
+      );
 
       res.status(200).json({ success: true });
     } catch (error: any) {
@@ -412,6 +444,14 @@ export const addAnswer = CatchAsyncError(
         return next(new ErrorHandler("Invalid content id", 400));
       }
 
+      // Until now ANY logged-in user could answer questions in ANY course.
+      const allowed = await hasCourseContentAccess(req.user?.role, String(req.user?._id), courseId);
+      if (!allowed) {
+        return next(
+          new ErrorHandler("You are not eligible to access this course", 404)
+        );
+      }
+
       const lesson = await LessonModel.findOne({ _id: contentId, course: courseId });
 
       if (!lesson) {
@@ -431,134 +471,43 @@ export const addAnswer = CatchAsyncError(
 
       await lesson.save();
 
-      if (req.user?._id === (question.user as any)._id) {
-        // asker is replying to their own question - no notification needed
-        await NotificationModel.create({
-          userId: req.user?._id,
-          title: "New question reply received",
-          message: `You have a new question reply in ${lesson.title}`,
-        });
-      } else {
-        // someone else (e.g. admin) answered - email the original asker
-        const data = {
-          name: (question.user as any).name,
-          title: lesson.title,
-        };
+      const asker = question.user as any;
+      const link = `/course-access/${courseId}`;
 
+      if (String(req.user?._id) === String(asker._id)) {
+        // the asker is following up on their own question: the staff should know
+        const owner = await CourseModel.findById(courseId).select("instructor");
+        if (owner?.instructor) {
+          await notifyUser(
+            String(owner.instructor),
+            "New question reply received",
+            `${req.user?.name} replied on their question in ${lesson.title}`,
+            link
+          );
+        }
+      } else {
+        // someone else answered: tell the asker in the app, and by email
+        await notifyUser(
+          String(asker._id),
+          "Your question was answered",
+          `${req.user?.name} replied to your question in ${lesson.title}`,
+          link
+        );
+
+        // The answer is already saved - a mail failure must not turn that into an error.
         try {
           await sendMail({
-            email: (question.user as any).email,
+            email: asker.email,
             subject: "Question Reply",
             template: "question-reply.ejs",
-            data,
+            data: { name: asker.name, title: lesson.title },
           });
         } catch (error: any) {
-          return next(new ErrorHandler(error.message, 500));
+          console.error("Question reply email failed:", error.message);
         }
       }
 
       res.status(200).json({ success: true });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }
-);
-
-// ------------------- Add review -------------------
-
-interface IAddReviewData {
-  review: string;
-  rating: number;
-  userId: string;
-}
-
-export const addReview = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userCourseList = req.user?.courses || [];
-      const courseId = req.params.id;
-
-      const courseExists = userCourseList.some(
-        (course: any) => course.courseId.toString() === courseId.toString()
-      );
-
-      if (!courseExists) {
-        return next(
-          new ErrorHandler("You are not eligible to access this course", 404)
-        );
-      }
-
-      const course = await CourseModel.findById(courseId);
-      const { review, rating } = req.body as IAddReviewData;
-
-      const reviewData: any = {
-        user: req.user,
-        comment: review,
-        rating,
-      };
-
-      course?.reviews.push(reviewData);
-
-      let avg = 0;
-      course?.reviews.forEach((rev: any) => {
-        avg += rev.rating;
-      });
-
-      if (course) {
-        course.ratings = avg / course.reviews.length;
-      }
-
-      await course?.save();
-
-      await NotificationModel.create({
-        userId: req.user?._id,
-        title: "New review received",
-        message: `${req.user?.name} has given a review on ${course?.name}`,
-      });
-
-      res.status(200).json({ success: true, course });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }
-);
-
-// ------------------- Add reply to review (admin) -------------------
-
-interface IAddReviewReplyData {
-  comment: string;
-  courseId: string;
-  reviewId: string;
-}
-
-export const addReplyToReview = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { comment, courseId, reviewId } = req.body as IAddReviewReplyData;
-
-      const course = await CourseModel.findById(courseId);
-      if (!course) {
-        return next(new ErrorHandler("Course not found", 404));
-      }
-
-      const review = course.reviews?.find(
-        (rev: any) => rev._id.toString() === reviewId
-      );
-
-      if (!review) {
-        return next(new ErrorHandler("Review not found", 404));
-      }
-
-      const replyData: any = { user: req.user, comment };
-
-      if (!review.commentReplies) {
-        review.commentReplies = [];
-      }
-      review.commentReplies.push(replyData);
-
-      await course.save();
-
-      res.status(200).json({ success: true, course });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -648,10 +597,16 @@ export const updateCourseStatus = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { status } = req.body;
+      const reason = String(req.body.reason || "").trim();
       const { id } = req.params;
 
       if (!COURSE_STATUSES.includes(status)) {
         return next(new ErrorHandler("Invalid course status", 400));
+      }
+
+      const before = await CourseModel.findById(id).select("status");
+      if (!before) {
+        return next(new ErrorHandler("Course not found", 404));
       }
 
       const course = await CourseModel.findByIdAndUpdate(
@@ -662,6 +617,24 @@ export const updateCourseStatus = CatchAsyncError(
 
       if (!course) {
         return next(new ErrorHandler("Course not found", 404));
+      }
+
+      // Tell the instructor the outcome of their submission. Only when the
+      // status really changed, so re-selecting the same value doesn't spam.
+      if (
+        course.instructor &&
+        before.status !== status &&
+        (status === "Published" || status === "Rejected")
+      ) {
+        await NotificationModel.create({
+          userId: String(course.instructor),
+          link: "/instructor",
+          title: status === "Published" ? "Course approved" : "Course rejected",
+          message:
+            status === "Published"
+              ? `"${course.name}" was approved and is now published`
+              : `"${course.name}" was rejected${reason ? `: ${reason}` : ""}`,
+        });
       }
 
       // A status change affects public visibility, so both the individual
@@ -677,6 +650,100 @@ export const updateCourseStatus = CatchAsyncError(
       );
 
       res.status(200).json({ success: true, course });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Instructor: submit a course for admin approval -------------------
+// Ownership is enforced by authorizeCourseOwner on the route.
+// Draft -> Pending Approval (also Rejected -> Pending Approval, i.e. resubmit
+// after fixing what the admin objected to).
+
+export const submitCourseForApproval = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const course = await CourseModel.findById(id).select("name status");
+      if (!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
+
+      if (course.status !== "Draft" && course.status !== "Rejected") {
+        return next(
+          new ErrorHandler(`A ${course.status} course can't be submitted for approval`, 400)
+        );
+      }
+
+      // Don't send admins an empty shell to review.
+      const lessonCount = await LessonModel.countDocuments({ course: id });
+      if (lessonCount === 0) {
+        return next(new ErrorHandler("Add at least one lesson before submitting for approval", 400));
+      }
+
+      // Atomic: only flips if it is still Draft/Rejected, so a double click
+      // can't send two notifications.
+      const updated = await CourseModel.findOneAndUpdate(
+        { _id: id, status: { $in: ["Draft", "Rejected"] } },
+        { status: "Pending Approval" },
+        { new: true }
+      );
+      if (!updated) {
+        return next(new ErrorHandler("This course was already submitted", 409));
+      }
+
+      await redis.del(id);
+      await redis.del("allCourses");
+
+      const admins = await userModel.find({ role: "admin" }).select("_id");
+      if (admins.length > 0) {
+        await NotificationModel.insertMany(
+          admins.map((admin) => ({
+            userId: String(admin._id),
+            title: "Course awaiting approval",
+            message: `${req.user?.name || "An instructor"} submitted "${updated.name}" for approval`,
+            link: "/admin/all-courses",
+          }))
+        );
+      }
+
+      logActivity(req, "course.submit_for_approval", `Submitted "${updated.name}" for approval`, {
+        courseId: id,
+      });
+
+      res.status(200).json({ success: true, course: updated });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Instructor: take a submission back -------------------
+// Pending Approval -> Draft, e.g. they spotted a mistake after submitting.
+
+export const withdrawCourseSubmission = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+
+      const updated = await CourseModel.findOneAndUpdate(
+        { _id: id, status: "Pending Approval" },
+        { status: "Draft" },
+        { new: true }
+      );
+      if (!updated) {
+        return next(new ErrorHandler("Only a course pending approval can be withdrawn", 400));
+      }
+
+      await redis.del(id);
+      await redis.del("allCourses");
+
+      logActivity(req, "course.withdraw_submission", `Withdrew "${updated.name}" from approval`, {
+        courseId: id,
+      });
+
+      res.status(200).json({ success: true, course: updated });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }

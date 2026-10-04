@@ -7,6 +7,8 @@ import QuizModel, { IQuizQuestion } from "../models/quiz.model";
 import QuizAttemptModel from "../models/quizAttempt.model";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
+import { tryIssueCertificate } from "../services/certificate.service";
+import { notifyCourseStudents } from "../services/notification.service";
 import { hasCourseContentAccess } from "../services/enrollment.service";
 import { logActivity } from "../utils/auditLog";
 
@@ -96,6 +98,13 @@ export const createQuiz = CatchAsyncError(
         quizId: quiz._id,
         courseId,
       });
+
+      await notifyCourseStudents(
+        courseId,
+        "New quiz available",
+        `"${title}" is now available in ${course.name}`,
+        `/course-access/${courseId}/quizzes`
+      );
 
       res.status(201).json({ success: true, quiz });
     } catch (error: any) {
@@ -344,7 +353,12 @@ export const submitQuizAttempt = CatchAsyncError(
           userId: req.user?._id,
           title: "Quiz passed",
           message: `You passed "${quiz.title}" with ${Math.round(percentage)}%`,
+          link: `/course-access/${quiz.course}/quizzes`,
         });
+
+        // This may have been the last quiz standing between the student and
+        // their certificate.
+        await tryIssueCertificate(String(req.user?._id), String(quiz.course));
       }
 
       res.status(201).json({

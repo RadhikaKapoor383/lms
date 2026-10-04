@@ -10,6 +10,7 @@
     "migrate:enrollments": "ts-node-dev --transpile-only src/migrate-enrollments.ts",
     "migrate:categories": "ts-node-dev --transpile-only src/migrate-categories.ts",
     "migrate:modules": "ts-node-dev --transpile-only src/migrate-modules-lessons.ts",
+    "migrate:certificates": "ts-node-dev --transpile-only src/migrate-certificates.ts",
     "build": "tsc && cp -r src/mails dist/mails",
     "start": "node dist/server.js"
   },
