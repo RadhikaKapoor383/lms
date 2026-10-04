@@ -18,8 +18,21 @@ import {
 } from "../utils/jwt";
 import { redis } from "../utils/redis";
 import { logActivity } from "../utils/auditLog";
+import { validatePassword } from "../utils/passwordPolicy";
+import { hashKeyPart, hitRateLimit } from "../utils/rateLimit";
+import {
+  RESET_EXPIRE_MINUTES,
+  buildResetUrl,
+  generateResetToken,
+  hashResetToken,
+  looksLikeResetToken,
+  resetExpiryFrom,
+} from "../services/passwordReset.service";
+import { notifyUser } from "../services/notification.service";
 
 // ------------------- Registration -------------------
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface IRegistrationBody {
   name: string;
@@ -48,6 +61,19 @@ export const registrationUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { name, email, password } = req.body as IRegistrationBody;
+
+      // Reject obviously bad input now, instead of emailing a code and failing
+      // later at activation.
+      if (typeof name !== "string" || !name.trim()) {
+        return next(new ErrorHandler("Please enter your name", 400));
+      }
+      if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
+        return next(new ErrorHandler("Please enter a valid email", 400));
+      }
+      const passwordProblem = validatePassword(password);
+      if (passwordProblem) {
+        return next(new ErrorHandler(passwordProblem, 400));
+      }
 
       const isEmailExist = await userModel.findOne({ email });
       if (isEmailExist) {
@@ -201,6 +227,9 @@ export const updateAccessToken = CatchAsyncError(
       }
 
       const user = JSON.parse(session);
+      // Sessions cached before the fix still carry the password hash; drop it
+      // here so the re-save below cleans the session up.
+      delete user.password;
 
       const accessToken = jwt.sign(
         { id: user._id },
@@ -241,6 +270,7 @@ export const getUserInfo = CatchAsyncError(
       const userJson = await redis.get(userId);
       if (userJson) {
         const user = JSON.parse(userJson);
+        delete user.password; // old cached sessions may still hold the hash
         return res.status(200).json({ success: true, user });
       }
       const user = await userModel.findById(userId);
@@ -326,6 +356,14 @@ export const updatePassword = CatchAsyncError(
 
       if (!oldPassword || !newPassword) {
         return next(new ErrorHandler("Please enter old and new password", 400));
+      }
+
+      const newPasswordProblem = validatePassword(newPassword);
+      if (newPasswordProblem) {
+        return next(new ErrorHandler(newPasswordProblem, 400));
+      }
+      if (oldPassword === newPassword) {
+        return next(new ErrorHandler("New password must be different from the old one", 400));
       }
 
       const user = await userModel
@@ -487,6 +525,135 @@ export const updateProfilePicture = CatchAsyncError(
       res.status(200).json({ success: true, user });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+// ------------------- Forgot password -------------------
+// Always answers the same thing, whether or not the email has an account, so
+// the form can't be used to find out who is registered. (The email is only
+// sent when the account exists.)
+
+const FORGOT_PASSWORD_MESSAGE =
+  "If an account exists for that email, we've sent a link to reset the password.";
+const FORGOT_LIMIT = 3; // requests ...
+const FORGOT_WINDOW_SECONDS = 60 * 60; // ... per email, per hour
+
+export const forgotPassword = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        return next(new ErrorHandler("Please enter a valid email", 400));
+      }
+
+      // Limited per EMAIL (not per IP): stops someone from flooding one person's
+      // inbox with reset mails. It counts whether or not the account exists, so
+      // hitting the limit reveals nothing.
+      const limit = await hitRateLimit(
+        `forgot:${hashKeyPart(email.toLowerCase())}`,
+        FORGOT_LIMIT,
+        FORGOT_WINDOW_SECONDS
+      );
+      if (!limit.allowed) {
+        const minutes = Math.ceil(limit.retryAfterSeconds / 60);
+        return next(
+          new ErrorHandler(
+            `Too many reset requests for this email. Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+            429
+          )
+        );
+      }
+
+      const user = await userModel.findOne({ email });
+
+      if (user) {
+        const { token, tokenHash } = generateResetToken();
+
+        // Requesting a new link replaces the old one (only one is ever valid).
+        await userModel.updateOne(
+          { _id: user._id },
+          { passwordResetToken: tokenHash, passwordResetExpires: resetExpiryFrom() }
+        );
+
+        // Sent in the background: waiting for the mail server would make
+        // "account exists" noticeably slower than "no such account".
+        sendMail({
+          email: user.email,
+          subject: "Reset your password",
+          template: "password-reset.ejs",
+          data: {
+            name: user.name,
+            resetUrl: buildResetUrl(token),
+            expiresInMinutes: RESET_EXPIRE_MINUTES,
+          },
+        }).catch((error: any) => {
+          console.error("Password reset email failed:", error.message);
+        });
+      }
+
+      res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Reset password -------------------
+
+const INVALID_RESET_LINK = "This reset link is invalid or has expired. Please request a new one.";
+
+export const resetPassword = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { token, password } = req.body || {};
+
+      if (!looksLikeResetToken(token)) {
+        return next(new ErrorHandler(INVALID_RESET_LINK, 400));
+      }
+      const passwordProblem = validatePassword(password);
+      if (passwordProblem) {
+        return next(new ErrorHandler(passwordProblem, 400));
+      }
+
+      // Claim the token and delete it in ONE atomic step. Two requests with the
+      // same link can't both succeed: the second finds nothing to claim.
+      const user = await userModel.findOneAndUpdate(
+        { passwordResetToken: hashResetToken(token), passwordResetExpires: { $gt: new Date() } },
+        { $unset: { passwordResetToken: "", passwordResetExpires: "" } }
+      );
+      if (!user) {
+        return next(new ErrorHandler(INVALID_RESET_LINK, 400));
+      }
+
+      user.password = password;
+      await user.save(); // the model's save hook hashes it
+
+      // The session in Redis is what keeps a device logged in, so deleting it
+      // signs the account out everywhere - including anyone who had got in with
+      // the old password.
+      await redis.del(String(user._id));
+
+      await notifyUser(
+        String(user._id),
+        "Password changed",
+        "Your password was reset. If this wasn't you, reset it again and contact us."
+      );
+      sendMail({
+        email: user.email,
+        subject: "Your password was changed",
+        template: "password-changed.ejs",
+        data: { name: user.name },
+      }).catch((error: any) => {
+        console.error("Password changed email failed:", error.message);
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Your password has been reset. You can log in with it now.",
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
     }
   }
 );
