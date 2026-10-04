@@ -1,3 +1,4 @@
+import { toPublicQuestion } from "../utils/publicProfile";
 import ModuleModel from "../models/module.model";
 import LessonModel from "../models/lesson.model";
 import LessonProgressModel from "../models/lessonProgress.model";
@@ -106,7 +107,7 @@ export const buildCourseDataArray = async (courseId: any, safeFields: boolean) =
         item.videoUrl = lesson.videoUrl;
         item.links = lesson.links;
         item.suggestion = lesson.suggestion;
-        item.questions = lesson.questions;
+        item.questions = (lesson.questions || []).map(toPublicQuestion);
       }
       flattened.push(item);
     }
