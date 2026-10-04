@@ -57,7 +57,7 @@ export const enrollmentApi = apiSlice.injectEndpoints({
         body: { completed },
         credentials: "include",
       }),
-      invalidatesTags: ["Enrollments"],
+      invalidatesTags: ["Enrollments", "Certificates"],
     }),
 
     // ---- Instructor / admin: students of one course ----

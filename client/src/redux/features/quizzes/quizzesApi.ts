@@ -73,7 +73,7 @@ export const quizzesApi = apiSlice.injectEndpoints({
         body: { answers, startedAt },
         credentials: "include",
       }),
-      invalidatesTags: ["Quizzes"],
+      invalidatesTags: ["Quizzes", "Certificates"],
     }),
   }),
 });

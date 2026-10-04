@@ -11,6 +11,35 @@ export const notificationsApi = apiSlice.injectEndpoints({
       providesTags: ["Notifications"],
     }),
 
+    // ---- Personal notifications (any logged-in user) - power the header bell ----
+
+    getMyNotifications: builder.query({
+      query: () => ({
+        url: "notifications",
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Notifications"],
+    }),
+
+    markNotificationRead: builder.mutation({
+      query: (id: string) => ({
+        url: `notifications/${id}/read`,
+        method: "PUT",
+        credentials: "include",
+      }),
+      invalidatesTags: ["Notifications"],
+    }),
+
+    markAllNotificationsRead: builder.mutation({
+      query: () => ({
+        url: "notifications/read-all",
+        method: "PUT",
+        credentials: "include",
+      }),
+      invalidatesTags: ["Notifications"],
+    }),
+
     updateNotification: builder.mutation({
       query: (id: string) => ({
         url: `admin/update-notification/${id}`,
@@ -22,5 +51,10 @@ export const notificationsApi = apiSlice.injectEndpoints({
   }),
 });
 
-export const { useGetAllNotificationsQuery, useUpdateNotificationMutation } =
-  notificationsApi;
+export const {
+  useGetAllNotificationsQuery,
+  useUpdateNotificationMutation,
+  useGetMyNotificationsQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+} = notificationsApi;

@@ -73,10 +73,28 @@ export const coursesApi = apiSlice.injectEndpoints({
     }),
 
     updateCourseStatus: builder.mutation({
-      query: ({ id, status }: { id: string; status: string }) => ({
+      query: ({ id, status, reason }: { id: string; status: string; reason?: string }) => ({
         url: `admin/course-status/${id}`,
         method: "PUT",
-        body: { status },
+        body: { status, reason },
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses"],
+    }),
+
+    submitCourseForApproval: builder.mutation({
+      query: (id: string) => ({
+        url: `courses/${id}/submit-for-approval`,
+        method: "PUT",
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses"],
+    }),
+
+    withdrawCourseSubmission: builder.mutation({
+      query: (id: string) => ({
+        url: `courses/${id}/withdraw-submission`,
+        method: "PUT",
         credentials: "include",
       }),
       invalidatesTags: ["Courses"],
@@ -125,4 +143,6 @@ export const {
   useEditCourseMutation,
   useDeleteCourseAdminMutation,
   useUpdateCourseStatusMutation,
+  useSubmitCourseForApprovalMutation,
+  useWithdrawCourseSubmissionMutation,
 } = coursesApi;
