@@ -21,6 +21,9 @@ export interface IUser extends Document {
   };
   role: UserRole;
   isVerified: boolean;
+  // SHA-256 of the emailed reset token (never the token itself) and its expiry.
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
   courses: Array<{ courseId: string }>;
   comparePassword: (password: string) => Promise<boolean>;
   SignAccessToken: () => string;
@@ -61,6 +64,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
     courses: [
       {
         courseId: String,
@@ -69,6 +74,20 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// A user document is turned into JSON in many places (the login response, the
+// Redis session cache, update-password...). Login loads the password with
+// select("+password"), and without this the bcrypt hash was sent to the browser
+// and cached in Redis along with the rest of the user. Stripping it here covers
+// every one of those places at once.
+userSchema.set("toJSON", {
+  transform: (_doc, ret: any) => {
+    delete ret.password;
+    delete ret.passwordResetToken;
+    delete ret.passwordResetExpires;
+    return ret;
+  },
+});
 
 // Hash password before saving (only if it was modified)
 userSchema.pre<IUser>("save", async function (next) {
