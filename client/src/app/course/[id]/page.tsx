@@ -1,5 +1,6 @@
 "use client";
 
+import StarRating from "@/components/StarRating";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import Header from "@/components/Header";
@@ -207,6 +208,46 @@ export default function CourseDetailsPage() {
                 </ul>
               </div>
             )}
+
+            <div className="mt-10">
+              <h2 className="font-display text-2xl text-ink dark:text-parchment">Reviews</h2>
+              {(course.reviews || []).length === 0 ? (
+                <p className="mt-3 text-ink/60 dark:text-parchment/60">No reviews yet.</p>
+              ) : (
+                <>
+                  <p className="mt-2 flex items-center gap-2 text-ink/70 dark:text-parchment/70">
+                    <StarRating value={course.ratings || 0} />
+                    {course.ratings || 0} out of 5 · {course.reviews.length}{" "}
+                    {course.reviews.length === 1 ? "review" : "reviews"}
+                  </p>
+                  <div className="mt-4 divide-y divide-parchment-dark dark:divide-ink-light">
+                    {course.reviews.map((r: any) => (
+                      <div key={r._id} className="py-4">
+                        <div className="flex items-center gap-3">
+                          <StarRating value={r.rating} size="text-base" />
+                          <p className="text-sm font-medium text-ink dark:text-parchment">
+                            {r.user?.name || "Student"}
+                          </p>
+                        </div>
+                        {r.comment && (
+                          <p className="mt-1 whitespace-pre-line text-ink/80 dark:text-parchment/80">
+                            {r.comment}
+                          </p>
+                        )}
+                        {(r.commentReplies || []).map((c: any, i: number) => (
+                          <p
+                            key={i}
+                            className="mt-2 border-l-2 border-mustard pl-3 text-sm text-ink/70 dark:text-parchment/70"
+                          >
+                            <span className="font-medium">{c.user?.name}:</span> {c.comment}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
       </main>
