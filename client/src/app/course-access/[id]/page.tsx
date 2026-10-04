@@ -8,6 +8,8 @@ import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
 import VideoPlayer from "@/components/VideoPlayer";
 import { useAppSelector } from "@/hooks/redux";
+import { useGetCertificateStatusQuery } from "@/redux/features/certificates/certificatesApi";
+import ReviewForm from "@/components/ReviewForm";
 import {
   useAddQuestionMutation,
   useGetCourseContentQuery,
@@ -30,6 +32,9 @@ export default function CourseAccessPage() {
   // course has no enrollment record to track.
   const { data: progressData } = useGetCourseProgressQuery(courseId, { skip: !isStudent });
   const [updateLessonProgress, { isLoading: isMarking }] = useUpdateLessonProgressMutation();
+  // Also issues the certificate on the spot if the student already qualifies.
+  const { data: certData } = useGetCertificateStatusQuery(courseId, { skip: !isStudent });
+  const certStatus = certData?.status;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [questionText, setQuestionText] = useState("");
@@ -77,6 +82,18 @@ export default function CourseAccessPage() {
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-4 flex justify-end gap-4">
           <Link
+            href={`/course-access/${courseId}/discussions`}
+            className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+          >
+            Discussions →
+          </Link>
+          <Link
+            href={`/course-access/${courseId}/announcements`}
+            className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+          >
+            Announcements →
+          </Link>
+          <Link
             href={`/course-access/${courseId}/assignments`}
             className="text-sm text-mustard-dark hover:underline dark:text-mustard"
           >
@@ -89,6 +106,40 @@ export default function CourseAccessPage() {
             View quizzes →
           </Link>
         </div>
+        {isStudent && certStatus && (
+          <div className="mb-6 border border-parchment-dark p-4 text-sm dark:border-ink-light">
+            {certStatus.certificate ? (
+              <p className="text-ink dark:text-parchment">
+                {certStatus.certificate.status === "valid"
+                  ? "🎓 You earned a certificate for this course. "
+                  : "Your certificate for this course was revoked. "}
+                <Link
+                  href={`/certificates/${certStatus.certificate.certificateId}`}
+                  className="text-mustard-dark underline dark:text-mustard"
+                >
+                  View certificate
+                </Link>
+              </p>
+            ) : certStatus.lessonsComplete && certStatus.pendingQuizzes.length > 0 ? (
+              <p className="text-ink dark:text-parchment">
+                All lessons done. Pass{" "}
+                {certStatus.pendingQuizzes.map((q: any) => `"${q.title}"`).join(", ")} to earn your
+                certificate.{" "}
+                <Link
+                  href={`/course-access/${courseId}/quizzes`}
+                  className="text-mustard-dark underline dark:text-mustard"
+                >
+                  Go to quizzes
+                </Link>
+              </p>
+            ) : (
+              <p className="text-ink/60 dark:text-parchment/60">
+                Finish every lesson and pass every quiz to earn a certificate.
+              </p>
+            )}
+          </div>
+        )}
+
         {isLoading && <Loader />}
 
         {isError && (
@@ -216,6 +267,7 @@ export default function CourseAccessPage() {
             </aside>
           </div>
         )}
+        {isStudent && <ReviewForm courseId={courseId} />}
       </main>
       <Footer />
     </>
