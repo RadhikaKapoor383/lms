@@ -6,6 +6,10 @@ import { usePathname } from "next/navigation";
 const links = [
   { label: "Dashboard", href: "/instructor" },
   { label: "Create course", href: "/instructor/create-course" },
+  { label: "Announcements", href: "/instructor/announcements" },
+  { label: "Discussions", href: "/instructor/discussions" },
+  { label: "Reviews", href: "/instructor/reviews" },
+  { label: "Certificates", href: "/instructor/certificates" },
 ];
 
 export default function InstructorSidebar() {
