@@ -8,6 +8,7 @@ import AssignmentSubmissionModel from "../models/assignmentSubmission.model";
 import EnrollmentModel from "../models/enrollment.model";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
+import { notifyCourseStudents } from "../services/notification.service";
 import { hasCourseContentAccess } from "../services/enrollment.service";
 import { logActivity } from "../utils/auditLog";
 
@@ -50,6 +51,13 @@ export const createAssignment = CatchAsyncError(
         courseId,
       });
 
+      await notifyCourseStudents(
+        courseId,
+        "New assignment",
+        `"${title}" was posted in ${course.name}, due ${new Date(deadline).toLocaleDateString()}`,
+        `/course-access/${courseId}/assignments`
+      );
+
       res.status(201).json({ success: true, assignment });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -71,7 +79,8 @@ export const editAssignment = CatchAsyncError(
           ...(instructions !== undefined && { instructions }),
           ...(resources !== undefined && { resources }),
           ...(maxMarks !== undefined && { maxMarks }),
-          ...(deadline !== undefined && { deadline }),
+          // a new deadline deserves a fresh reminder
+          ...(deadline !== undefined && { deadline, deadlineReminderSent: false }),
           ...(allowResubmission !== undefined && { allowResubmission: !!allowResubmission }),
         },
         { new: true, runValidators: true }
@@ -233,6 +242,7 @@ export const submitAssignment = CatchAsyncError(
         userId: assignment.instructor,
         title: "New assignment submission",
         message: `${req.user?.name} submitted "${assignment.title}"`,
+        link: `/instructor/assignments/${assignment._id}/submissions`,
       });
 
       res.status(existing ? 200 : 201).json({ success: true, submission });
@@ -278,6 +288,7 @@ export const gradeSubmission = CatchAsyncError(
         userId: studentId,
         title: "Assignment graded",
         message: `Your submission for "${assignment.title}" was graded`,
+        link: `/course-access/${assignment.course}/assignments`,
       });
 
       res.status(200).json({ success: true, submission });
