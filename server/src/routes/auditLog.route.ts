@@ -1,27 +1,14 @@
 import express from "express";
 import { authorizeRoles, isAuthenticated } from "../middleware/auth";
-import {
-  createAnnouncement,
-  deleteAnnouncement,
-  getAnnouncements,
-} from "../controllers/announcement.controller";
+import { getAuditLogs } from "../controllers/auditLog.controller";
 
-const announcementRouter = express.Router();
+const auditLogRouter = express.Router();
 
-announcementRouter.get("/announcements", getAnnouncements);
-
-announcementRouter.post(
-  "/admin/create-announcement",
+auditLogRouter.get(
+  "/admin/audit-logs",
   isAuthenticated,
   authorizeRoles("admin"),
-  createAnnouncement
+  getAuditLogs
 );
 
-announcementRouter.delete(
-  "/admin/announcement/:id",
-  isAuthenticated,
-  authorizeRoles("admin"),
-  deleteAnnouncement
-);
-
-export default announcementRouter;
+export default auditLogRouter;

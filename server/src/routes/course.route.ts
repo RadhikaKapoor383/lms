@@ -7,8 +7,6 @@ import {
 import {
   addAnswer,
   addQuestion,
-  addReplyToReview,
-  addReview,
   deleteCourse,
   editCourse,
   getAdminAllCourses,
@@ -17,8 +15,10 @@ import {
   getInstructorCourses,
   getCourseByUser,
   getSingleCourse,
+  submitCourseForApproval,
   updateCourseStatus,
   uploadCourse,
+  withdrawCourseSubmission,
 } from "../controllers/course.controller";
 
 const courseRouter = express.Router();
@@ -48,6 +48,22 @@ courseRouter.put(
   editCourse
 );
 
+courseRouter.put(
+  "/courses/:id/submit-for-approval",
+  isAuthenticated,
+  authorizeRoles("instructor"),
+  authorizeCourseOwner,
+  submitCourseForApproval
+);
+
+courseRouter.put(
+  "/courses/:id/withdraw-submission",
+  isAuthenticated,
+  authorizeRoles("instructor"),
+  authorizeCourseOwner,
+  withdrawCourseSubmission
+);
+
 courseRouter.get(
   "/instructor/courses",
   isAuthenticated,
@@ -61,14 +77,6 @@ courseRouter.get("/get-course-content/:id", isAuthenticated, getCourseByUser);
 
 courseRouter.put("/add-question", isAuthenticated, addQuestion);
 courseRouter.put("/add-answer", isAuthenticated, addAnswer);
-courseRouter.put("/add-review/:id", isAuthenticated, addReview);
-courseRouter.put(
-  "/add-reply-review",
-  isAuthenticated,
-  authorizeRoles("admin"),
-  addReplyToReview
-);
-
 courseRouter.get(
   "/admin/courses",
   isAuthenticated,
