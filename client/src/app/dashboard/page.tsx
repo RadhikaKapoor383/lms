@@ -7,6 +7,7 @@ import Loader from "@/components/Loader";
 import RoleProtected from "@/components/RoleProtected";
 import { useGetMyEnrollmentsQuery } from "@/redux/features/enrollment/enrollmentApi";
 import { useGetMyAssignmentsQuery } from "@/redux/features/assignments/assignmentsApi";
+import { useGetMyAnnouncementsQuery } from "@/redux/features/announcements/announcementsApi";
 import { useAppSelector } from "@/hooks/redux";
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -29,6 +30,9 @@ function StudentDashboardContent() {
   const upcomingDeadlines = (assignmentsData?.assignments || [])
     .filter((a: any) => !a.mySubmission && new Date(a.deadline) > new Date())
     .slice(0, 5);
+
+  const { data: announcementsData } = useGetMyAnnouncementsQuery(undefined);
+  const recentAnnouncements = (announcementsData?.announcements || []).slice(0, 3);
 
   const inProgress = enrollments.filter(
     (e: any) => e.status === "active" && e.completionPercentage < 100
@@ -95,13 +99,39 @@ function StudentDashboardContent() {
           </div>
         )}
 
+        {recentAnnouncements.length > 0 && (
+          <div className="mt-10">
+            <h2 className="font-display text-2xl text-ink dark:text-parchment">
+              Recent announcements
+            </h2>
+            <div className="mt-4 divide-y divide-parchment-dark dark:divide-ink-light">
+              {recentAnnouncements.map((a: any) => (
+                <div key={a._id} className="py-3">
+                  <p className="text-ink dark:text-parchment">{a.title}</p>
+                  <p className="text-sm text-ink/60 dark:text-parchment/60">
+                    {a.course?.name || "Platform"} · {new Date(a.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mt-10 flex items-center justify-between">
           <h2 className="font-display text-2xl text-ink dark:text-parchment">
             My courses
           </h2>
-          <Link href="/courses" className="text-sm text-mustard-dark hover:underline dark:text-mustard">
-            Browse more courses
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/my-certificates"
+              className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+            >
+              My certificates
+            </Link>
+            <Link href="/courses" className="text-sm text-mustard-dark hover:underline dark:text-mustard">
+              Browse more courses
+            </Link>
+          </div>
         </div>
 
         {isLoading && <Loader />}

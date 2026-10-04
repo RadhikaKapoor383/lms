@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import Loader from "@/components/Loader";
-import { useGetInstructorCoursesQuery } from "@/redux/features/courses/coursesApi";
+import { useState } from "react";
+import {
+  useGetInstructorCoursesQuery,
+  useSubmitCourseForApprovalMutation,
+  useWithdrawCourseSubmissionMutation,
+} from "@/redux/features/courses/coursesApi";
 
 const statusBadgeClass: Record<string, string> = {
   Draft: "bg-parchment-dark text-ink/70",
@@ -29,6 +34,19 @@ export default function InstructorDashboardPage() {
   const { data, isLoading, isError } = useGetInstructorCoursesQuery(undefined);
   const courses = data?.courses || [];
 
+  const [submitForApproval, { isLoading: isSubmitting }] = useSubmitCourseForApprovalMutation();
+  const [withdrawSubmission, { isLoading: isWithdrawing }] = useWithdrawCourseSubmissionMutation();
+  const [actionError, setActionError] = useState("");
+
+  const runAction = async (action: () => Promise<unknown>, fallback: string) => {
+    setActionError("");
+    try {
+      await action();
+    } catch (err: any) {
+      setActionError(err?.data?.message || fallback);
+    }
+  };
+
   const count = (status: string) =>
     courses.filter((c: any) => c.status === status).length;
 
@@ -51,6 +69,8 @@ export default function InstructorDashboardPage() {
         <StatCard label="Published" value={count("Published")} />
         <StatCard label="Drafts" value={count("Draft")} />
       </div>
+
+      {actionError && <p className="mt-4 text-sm text-clay">{actionError}</p>}
 
       {isLoading && <Loader />}
       {isError && (
@@ -83,6 +103,34 @@ export default function InstructorDashboardPage() {
               </p>
             </div>
             <div className="flex items-center gap-4">
+              {(course.status === "Draft" || course.status === "Rejected") && (
+                <button
+                  onClick={() =>
+                    runAction(
+                      () => submitForApproval(course._id).unwrap(),
+                      "Could not submit for approval"
+                    )
+                  }
+                  disabled={isSubmitting}
+                  className="rounded-full bg-mustard px-3 py-1 text-xs font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                >
+                  {course.status === "Rejected" ? "Resubmit for approval" : "Submit for approval"}
+                </button>
+              )}
+              {course.status === "Pending Approval" && (
+                <button
+                  onClick={() =>
+                    runAction(
+                      () => withdrawSubmission(course._id).unwrap(),
+                      "Could not withdraw the submission"
+                    )
+                  }
+                  disabled={isWithdrawing}
+                  className="text-sm text-clay hover:underline disabled:opacity-60"
+                >
+                  Withdraw
+                </button>
+              )}
               <Link
                 href={`/instructor/edit-course/${course._id}`}
                 className="text-sm text-mustard-dark hover:underline dark:text-mustard"
