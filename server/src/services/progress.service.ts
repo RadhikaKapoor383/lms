@@ -5,6 +5,7 @@ import LessonProgressModel from "../models/lessonProgress.model";
 import NotificationModel from "../models/notification.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { isObjectId } from "./enrollment.service";
+import { tryIssueCertificate } from "./certificate.service";
 
 interface IProgressSummary {
   completionPercentage: number;
@@ -111,12 +112,19 @@ export const setLessonCompleted = async (
       userId: String(studentId),
       title: "Course completed",
       message: `You completed ${course.name}`,
+      link: `/course-access/${courseId}`,
     });
   } else if (percentage < 100 && enrollment.status === "completed") {
     enrollment.status = "active";
     enrollment.completedAt = undefined;
   }
   await enrollment.save();
+
+  // Lessons are all done - the student may now qualify for a certificate
+  // (it also checks that every quiz is passed, so this is safe to call).
+  if (enrollment.status === "completed") {
+    await tryIssueCertificate(studentId, courseId);
+  }
 
   const done = await LessonProgressModel.find({
     student: studentId,
