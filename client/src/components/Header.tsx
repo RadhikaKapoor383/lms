@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAppSelector } from "@/hooks/redux";
 import { useLazyLogOutQuery } from "@/redux/features/auth/authApi";
 import { Role, roleHome, roleLabel } from "@/types/role";
+import NotificationBell from "./NotificationBell";
 
 const navLinks = [
   { label: "Courses", href: "/courses" },
@@ -44,6 +45,7 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-4">
+          {user && <NotificationBell />}
           <button
             aria-label="Toggle color theme"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
