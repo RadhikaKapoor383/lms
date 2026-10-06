@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { resetPasswordSchema } from "@/utils/validationSchemas";
 import { useResetPasswordMutation } from "@/redux/features/auth/authApi";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ResetPasswordPage() {
   const params = useParams();
@@ -60,15 +61,14 @@ export default function ResetPasswordPage() {
                 <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
                   New password
                 </label>
-                <input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   autoComplete="new-password"
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   value={formik.values.password}
-                  className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+                  className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
                 />
                 {formik.touched.password && formik.errors.password && (
                   <p className="mt-1 text-sm text-clay">{formik.errors.password}</p>
@@ -79,15 +79,14 @@ export default function ResetPasswordPage() {
                 <label htmlFor="confirmPassword" className="text-sm text-ink/70 dark:text-parchment/70">
                   Confirm new password
                 </label>
-                <input
+                <PasswordInput
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
                   autoComplete="new-password"
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   value={formik.values.confirmPassword}
-                  className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+                  className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
                 />
                 {formik.touched.confirmPassword && formik.errors.confirmPassword && (
                   <p className="mt-1 text-sm text-clay">{formik.errors.confirmPassword}</p>
