@@ -27,6 +27,7 @@ import { hasCourseContentAccess, isObjectId } from "../services/enrollment.servi
 import NotificationModel from "../models/notification.model";
 import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
 import { toPublicCourse } from "../utils/publicProfile";
+import { getSettings } from "../services/settings.service";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
 import { logActivity } from "../utils/auditLog";
@@ -682,11 +683,15 @@ export const submitCourseForApproval = CatchAsyncError(
         return next(new ErrorHandler("Add at least one lesson before submitting for approval", 400));
       }
 
+      // An admin can turn approval off platform-wide: then "submit" publishes.
+      const { requireCourseApproval } = await getSettings();
+      const nextStatus = requireCourseApproval ? "Pending Approval" : "Published";
+
       // Atomic: only flips if it is still Draft/Rejected, so a double click
       // can't send two notifications.
       const updated = await CourseModel.findOneAndUpdate(
         { _id: id, status: { $in: ["Draft", "Rejected"] } },
-        { status: "Pending Approval" },
+        { status: nextStatus },
         { new: true }
       );
       if (!updated) {
@@ -696,7 +701,10 @@ export const submitCourseForApproval = CatchAsyncError(
       await redis.del(id);
       await redis.del("allCourses");
 
-      const admins = await userModel.find({ role: "admin" }).select("_id");
+      // Nothing for the admins to review when approval is off.
+      const admins = requireCourseApproval
+        ? await userModel.find({ role: "admin" }).select("_id")
+        : [];
       if (admins.length > 0) {
         await NotificationModel.insertMany(
           admins.map((admin) => ({
@@ -708,9 +716,14 @@ export const submitCourseForApproval = CatchAsyncError(
         );
       }
 
-      logActivity(req, "course.submit_for_approval", `Submitted "${updated.name}" for approval`, {
-        courseId: id,
-      });
+      logActivity(
+        req,
+        requireCourseApproval ? "course.submit_for_approval" : "course.publish",
+        requireCourseApproval
+          ? `Submitted "${updated.name}" for approval`
+          : `Published "${updated.name}" (approval is off)`,
+        { courseId: id }
+      );
 
       res.status(200).json({ success: true, course: updated });
     } catch (error: any) {
