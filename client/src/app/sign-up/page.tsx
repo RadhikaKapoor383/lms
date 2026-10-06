@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { registerSchema } from "@/utils/validationSchemas";
 import { useRegisterMutation } from "@/redux/features/auth/authApi";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -80,14 +81,13 @@ export default function SignUpPage() {
             <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               onChange={formik.handleChange}
               onBlur={formik.handleBlur}
               value={formik.values.password}
-              className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+              className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
             />
             {formik.touched.password && formik.errors.password && (
               <p className="mt-1 text-sm text-clay">{formik.errors.password}</p>
