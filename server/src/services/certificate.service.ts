@@ -6,8 +6,8 @@ import QuizModel from "../models/quiz.model";
 import QuizAttemptModel from "../models/quizAttempt.model";
 import NotificationModel from "../models/notification.model";
 import userModel from "../models/user.model";
+import { getSettings } from "./settings.service";
 
-export const PLATFORM_NAME = process.env.PLATFORM_NAME || "LMS";
 
 // ---------------------------------------------------------------------------
 // 1. The rule (pure - no database, so it can be tested on its own)
@@ -129,6 +129,10 @@ export const evaluateCertificate = async (
     if (instructor?.name) instructorName = instructor.name;
   }
 
+  // the name is a snapshot too: renaming the platform later doesn't rewrite
+  // certificates that were already issued
+  const { platformName } = await getSettings();
+
   try {
     const certificate = await CertificateModel.create({
       certificateId: generateCertificateId(),
@@ -138,7 +142,7 @@ export const evaluateCertificate = async (
       studentName: student.name,
       courseName: course.name,
       instructorName,
-      platformName: PLATFORM_NAME,
+      platformName,
       completionDate: eligibility.completedAt || new Date(),
       issuedAt: new Date(),
     });
