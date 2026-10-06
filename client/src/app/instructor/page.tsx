@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Loader from "@/components/Loader";
+import InstructorInsights from "@/components/InstructorInsights";
 import { useState } from "react";
 import {
   useGetInstructorCoursesQuery,
@@ -16,19 +17,6 @@ const statusBadgeClass: Record<string, string> = {
   Rejected: "bg-clay/20 text-clay",
   Archived: "bg-parchment-dark text-ink/40",
 };
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="border border-parchment-dark p-5 dark:border-ink-light">
-      <p className="text-sm uppercase tracking-wide text-ink/50 dark:text-parchment/50">
-        {label}
-      </p>
-      <p className="mt-2 font-display text-3xl text-ink dark:text-parchment">
-        {value}
-      </p>
-    </div>
-  );
-}
 
 export default function InstructorDashboardPage() {
   const { data, isLoading, isError } = useGetInstructorCoursesQuery(undefined);
@@ -47,14 +35,11 @@ export default function InstructorDashboardPage() {
     }
   };
 
-  const count = (status: string) =>
-    courses.filter((c: any) => c.status === status).length;
-
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl text-ink dark:text-parchment">
-          My courses
+          Dashboard
         </h1>
         <Link
           href="/instructor/create-course"
@@ -64,11 +49,9 @@ export default function InstructorDashboardPage() {
         </Link>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total courses" value={courses.length} />
-        <StatCard label="Published" value={count("Published")} />
-        <StatCard label="Drafts" value={count("Draft")} />
-      </div>
+      <InstructorInsights />
+
+      <h2 className="mt-12 font-display text-2xl text-ink dark:text-parchment">My courses</h2>
 
       {actionError && <p className="mt-4 text-sm text-clay">{actionError}</p>}
 
