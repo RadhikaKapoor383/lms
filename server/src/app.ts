@@ -21,6 +21,10 @@ import quizRouter from "./routes/quiz.route";
 import certificateRouter from "./routes/certificate.route";
 import discussionRouter from "./routes/discussion.route";
 import reviewRouter from "./routes/review.route";
+import settingsRouter from "./routes/settings.route";
+import reportRouter from "./routes/report.route";
+import adminManagementRouter from "./routes/adminManagement.route";
+import dashboardRouter from "./routes/dashboard.route";
 
 // body parser
 app.use(express.json({ limit: "50mb" }));
@@ -53,7 +57,11 @@ app.use(
   quizRouter,
   certificateRouter,
   discussionRouter,
-  reviewRouter
+  reviewRouter,
+  settingsRouter,
+  reportRouter,
+  adminManagementRouter,
+  dashboardRouter
 );
 
 // testing route
