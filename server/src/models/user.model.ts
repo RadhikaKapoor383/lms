@@ -21,6 +21,10 @@ export interface IUser extends Document {
   };
   role: UserRole;
   isVerified: boolean;
+  // false = deactivated by an admin: cannot log in and is signed out at once.
+  // Accounts created before this field existed have none, which counts as active.
+  isActive?: boolean;
+  createdAt?: Date; // added by the schema's timestamps option
   // SHA-256 of the emailed reset token (never the token itself) and its expiry.
   passwordResetToken?: string;
   passwordResetExpires?: Date;
@@ -64,6 +68,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isActive: { type: Boolean, default: true },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
     courses: [
