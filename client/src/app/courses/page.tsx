@@ -1,6 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import CourseList from "@/components/CourseList";
+import CourseSearch from "@/components/CourseSearch";
 
 export default function CoursesPage() {
   return (
@@ -11,10 +11,10 @@ export default function CoursesPage() {
           All courses
         </h1>
         <p className="mt-2 max-w-prose text-ink/70 dark:text-parchment/70">
-          Every path currently open for enrollment.
+          Search by name, or narrow by category, level, instructor, length and how you can enroll.
         </p>
         <div className="mt-10">
-          <CourseList />
+          <CourseSearch />
         </div>
       </main>
       <Footer />
