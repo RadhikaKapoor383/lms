@@ -1,4 +1,5 @@
 import express from "express";
+import { getCourseFilters, searchCourses } from "../controllers/courseSearch.controller";
 import {
   authorizeCourseOwner,
   authorizeRoles,
@@ -73,6 +74,10 @@ courseRouter.get(
 
 courseRouter.get("/get-course/:id", getSingleCourse);
 courseRouter.get("/get-courses", getAllCourses);
+
+// public search + the options for its filter dropdowns
+courseRouter.get("/courses/search", searchCourses);
+courseRouter.get("/courses/filters", getCourseFilters);
 courseRouter.get("/get-course-content/:id", isAuthenticated, getCourseByUser);
 
 courseRouter.put("/add-question", isAuthenticated, addQuestion);
