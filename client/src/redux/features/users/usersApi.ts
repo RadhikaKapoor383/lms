@@ -21,6 +21,17 @@ export const usersApi = apiSlice.injectEndpoints({
       invalidatesTags: ["User"],
     }),
 
+    // deactivating signs the person out everywhere and blocks login; nothing is deleted
+    setUserActive: builder.mutation({
+      query: ({ id, active }: { id: string; active: boolean }) => ({
+        url: `admin/users/${id}/status`,
+        method: "PUT",
+        body: { active },
+        credentials: "include",
+      }),
+      invalidatesTags: ["User", "Instructors"],
+    }),
+
     deleteUserAdmin: builder.mutation({
       query: (id: string) => ({
         url: `admin/user/${id}`,
@@ -35,5 +46,6 @@ export const usersApi = apiSlice.injectEndpoints({
 export const {
   useGetAllUsersAdminQuery,
   useUpdateUserRoleMutation,
+  useSetUserActiveMutation,
   useDeleteUserAdminMutation,
 } = usersApi;

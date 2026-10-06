@@ -82,6 +82,18 @@ export const coursesApi = apiSlice.injectEndpoints({
       invalidatesTags: ["Courses"],
     }),
 
+    // public search with filters; params are only the ones the user actually set
+    searchCourses: builder.query({
+      query: (params: Record<string, string>) => ({
+        url: `courses/search?${new URLSearchParams(params).toString()}`,
+        method: "GET",
+      }),
+    }),
+
+    getCourseFilters: builder.query({
+      query: () => ({ url: "courses/filters", method: "GET" }),
+    }),
+
     submitCourseForApproval: builder.mutation({
       query: (id: string) => ({
         url: `courses/${id}/submit-for-approval`,
@@ -143,6 +155,8 @@ export const {
   useEditCourseMutation,
   useDeleteCourseAdminMutation,
   useUpdateCourseStatusMutation,
+  useSearchCoursesQuery,
+  useGetCourseFiltersQuery,
   useSubmitCourseForApprovalMutation,
   useWithdrawCourseSubmissionMutation,
 } = coursesApi;
