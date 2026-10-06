@@ -5,6 +5,7 @@ import Loader from "@/components/Loader";
 import {
   useDeleteUserAdminMutation,
   useGetAllUsersAdminQuery,
+  useSetUserActiveMutation,
   useUpdateUserRoleMutation,
 } from "@/redux/features/users/usersApi";
 import { useAppSelector } from "@/hooks/redux";
@@ -16,6 +17,7 @@ export default function AdminUsersPage() {
   const { data, isLoading } = useGetAllUsersAdminQuery(undefined);
   const [updateRole] = useUpdateUserRoleMutation();
   const [deleteUser] = useDeleteUserAdminMutation();
+  const [setUserActive] = useSetUserActiveMutation();
   const { user: currentUser } = useAppSelector((state) => state.auth);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState("");
@@ -26,6 +28,22 @@ export default function AdminUsersPage() {
       await updateRole({ id, role }).unwrap();
     } catch (err: any) {
       setRoleError(err?.data?.message || "Could not change the role");
+    }
+  };
+
+  const handleActive = async (u: any) => {
+    const deactivating = u.isActive !== false;
+    if (
+      deactivating &&
+      !window.confirm(`Deactivate ${u.name}? They will be signed out everywhere and can't log in until you reactivate them.`)
+    ) {
+      return;
+    }
+    setRoleError("");
+    try {
+      await setUserActive({ id: u._id, active: !deactivating }).unwrap();
+    } catch (err: any) {
+      setRoleError(err?.data?.message || "Could not change the account status");
     }
   };
 
@@ -40,9 +58,19 @@ export default function AdminUsersPage() {
 
       <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
         {users.map((u: any) => (
-          <div key={u._id} className="flex items-center justify-between py-4">
+          <div
+            key={u._id}
+            className={`flex items-center justify-between py-4 ${u.isActive === false ? "opacity-60" : ""}`}
+          >
             <div>
-              <p className="font-medium text-ink dark:text-parchment">{u.name}</p>
+              <p className="font-medium text-ink dark:text-parchment">
+                {u.name}
+                {u.isActive === false && (
+                  <span className="ml-3 rounded-full bg-clay/20 px-2.5 py-0.5 text-xs font-normal text-clay">
+                    Deactivated
+                  </span>
+                )}
+              </p>
               <p className="text-sm text-ink/60 dark:text-parchment/60">{u.email}</p>
             </div>
             <div className="flex items-center gap-4">
@@ -58,6 +86,15 @@ export default function AdminUsersPage() {
                   </option>
                 ))}
               </select>
+
+              {u._id !== currentUser?._id && (
+                <button
+                  onClick={() => handleActive(u)}
+                  className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+                >
+                  {u.isActive === false ? "Activate" : "Deactivate"}
+                </button>
+              )}
 
               {u._id === currentUser?._id ? (
                 <span className="text-sm text-ink/40 dark:text-parchment/40">You</span>

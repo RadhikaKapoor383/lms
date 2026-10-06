@@ -4,6 +4,7 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
+import StudentInsights from "@/components/StudentInsights";
 import RoleProtected from "@/components/RoleProtected";
 import { useGetMyEnrollmentsQuery } from "@/redux/features/enrollment/enrollmentApi";
 import { useGetMyAssignmentsQuery } from "@/redux/features/assignments/assignmentsApi";
@@ -98,6 +99,8 @@ function StudentDashboardContent() {
             </div>
           </div>
         )}
+
+        <StudentInsights />
 
         {recentAnnouncements.length > 0 && (
           <div className="mt-10">

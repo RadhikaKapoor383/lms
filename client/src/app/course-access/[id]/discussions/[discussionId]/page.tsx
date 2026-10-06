@@ -6,6 +6,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
+import ReportButton from "@/components/ReportButton";
 import { useAppSelector } from "@/hooks/redux";
 import {
   useAddDiscussionReplyMutation,
@@ -118,6 +119,7 @@ export default function DiscussionThreadPage() {
                     {discussion.pinned ? "Unpin" : "Pin"}
                   </button>
                 )}
+                {!isThreadAuthor && <ReportButton discussionId={discussionId} />}
                 {(canModerate || isThreadAuthor) && (
                   <button onClick={handleDeleteThread} className="text-clay hover:underline">
                     Delete
@@ -151,6 +153,9 @@ export default function DiscussionThreadPage() {
                       {r.body}
                     </p>
                   </div>
+                  {String(r.author) !== String(user?._id) && (
+                    <ReportButton discussionId={discussionId} replyId={r._id} />
+                  )}
                   {(canModerate || String(r.author) === String(user?._id)) && (
                     <button
                       onClick={() =>
