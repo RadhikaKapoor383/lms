@@ -11,72 +11,72 @@ The README below reflects the current implementation state of the project as it 
 ## Implemented features
 
 ### Authentication and access control
-- User registration and activation flow
-- Login/logout with JWT + cookie-based auth
-- Role-based route protection for admin, instructor, and student
-- Redis-backed session/user retrieval
-- Admin-level role change management
+- User registration and activation flow.
+- Login/logout with JWT + cookie-based auth.
+- Role-based route protection for admin, instructor, and student.
+- Redis-backed session/user retrieval.
+- Admin-level role change management.
 
 ### Admin features
-- Admin dashboard overview
-- Admin course management
-- Course approval/status handling
-- User management
-- Enrollment monitoring
-- Analytics dashboard cards
-- Announcements management
-- Notifications page
-- Activity log view
-- Categories management
+- Admin dashboard overview.
+- Admin course management.
+- Course approval/status handling.
+- User management.
+- Enrollment monitoring.
+- Analytics dashboard cards.
+- Announcements management.
+- Notifications page.
+- Activity log view.
+- Categories management.
 
 ### Instructor features
-- Instructor dashboard
-- Course creation and editing
-- Instructor-owned course listing
-- Student management for assigned courses
-- Assignment creation and grading
-- Quiz creation and results review
-- Course content access control
+- Instructor dashboard.
+- Course creation and editing.
+- Instructor-owned course listing.
+- Student management for assigned courses.
+- Assignment creation and grading.
+- Quiz creation and results review.
+- Course content access control.
 
 ### Student features
-- Student dashboard
-- Browse and view course list
-- Course content access after enrollment
-- Lesson completion tracking
-- Assignment submission and visibility
-- Quiz taking and attempts
-- Progress tracking
-- Upcoming deadline tracking
+- Student dashboard.
+- Browse and view course list.
+- Course content access after enrollment.
+- Lesson completion tracking.
+- Assignment submission and visibility.
+- Quiz taking and attempts.
+- Progress tracking.
+- Upcoming deadline tracking.
 
 ### Course and enrollment system
-- Course catalog and details pages
-- Student enrollment flow
-- Instructor/manual enrollment support
-- Course status lifecycle: Draft, Pending Approval, Published, Rejected, Archived
-- Access gating for course content
+- Course catalog and details pages.
+- Student enrollment flow.
+- Instructor/manual enrollment support.
+- Course status lifecycle: Draft, Pending Approval, Published, Rejected, Archived.
+- Access gating for course content.
 
 ### Assignment and quiz system
-- Create / edit / delete assignments
-- Submit assignments and grade them
-- Quiz creation with question types and attempt tracking
-- Basic result/score tracking
+- Create / edit / delete assignments.
+- Submit assignments and grade them.
+- Quiz creation with question types and attempt tracking.
+- Basic result/score tracking.
 
 ### Notifications and announcements
-- Announcement posting and listing
-- Notification read flow
-- Notification creation for key events
+- Announcement posting and listing.
+- Notification read flow.
+- Notification creation for key events.
 
 ## Remaining gaps / not fully completed yet
 
 The following items from the original assignment specification are still not fully implemented in this project:
 
-- Certificate generation and certificate pages
-- Full discussion/forum system for courses
-- Forgot password and reset password flow
-- Full review moderation workflow
-- Advanced analytics and reports beyond basic dashboard counts
-- Full admin/instructor/student profile management pages
-- Complete end-to-end email verification/reset UX
+- Certificate generation and certificate pages.
+- Full discussion/forum system for courses.
+- Forgot password and reset password flow.
+- Full review moderation workflow.
+- Advanced analytics and reports beyond basic dashboard counts.
+- Full admin/instructor/student profile management pages.
+- Complete end-to-end email verification/reset UX.
 
 These are the next major features to implement if the project is to match the original full-scale LMS specification closely.
 
