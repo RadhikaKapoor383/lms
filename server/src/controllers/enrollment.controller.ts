@@ -13,6 +13,10 @@ import {
   revokeEnrollment,
 } from "../services/enrollment.service";
 import { getProgress, setLessonCompleted } from "../services/progress.service";
+import { getSettings } from "../services/settings.service";
+
+const SELF_ENROLL_OFF =
+  "Self-enrollment is turned off right now. Please ask your instructor to enroll you.";
 
 // ------------------- Student: enroll in a free, open course -------------------
 
@@ -23,6 +27,9 @@ export const enrollInFreeCourse = CatchAsyncError(
 
       if (!isObjectId(courseId)) {
         return next(new ErrorHandler("Invalid course id", 400));
+      }
+      if (!(await getSettings()).allowSelfEnrollment) {
+        return next(new ErrorHandler(SELF_ENROLL_OFF, 403));
       }
 
       const course = await CourseModel.findOne({
@@ -67,6 +74,9 @@ export const enrollWithCode = CatchAsyncError(
 
       if (!isObjectId(courseId) || typeof code !== "string" || !code.trim()) {
         return next(new ErrorHandler("Course and enrollment code are required", 400));
+      }
+      if (!(await getSettings()).allowSelfEnrollment) {
+        return next(new ErrorHandler(SELF_ENROLL_OFF, 403));
       }
 
       const course = await CourseModel.findOne({

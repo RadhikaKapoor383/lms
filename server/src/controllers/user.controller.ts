@@ -175,6 +175,12 @@ export const loginUser = CatchAsyncError(
         return next(new ErrorHandler("Invalid email or password", 400));
       }
 
+      if (user.isActive === false) {
+        return next(
+          new ErrorHandler("This account has been deactivated. Please contact an administrator.", 403)
+        );
+      }
+
       sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
@@ -282,29 +288,6 @@ export const getUserInfo = CatchAsyncError(
 );
 
 // ------------------- Social auth -------------------
-
-interface ISocialAuthBody {
-  email: string;
-  name: string;
-  avatar: string;
-}
-
-export const socialAuth = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email, name, avatar } = req.body as ISocialAuthBody;
-      const user = await userModel.findOne({ email });
-      if (!user) {
-        const newUser = await userModel.create({ email, name, avatar });
-        sendToken(newUser, 200, res);
-      } else {
-        sendToken(user, 200, res);
-      }
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
-  }
-);
 
 // ------------------- Update user info -------------------
 
@@ -567,7 +550,7 @@ export const forgotPassword = CatchAsyncError(
 
       const user = await userModel.findOne({ email });
 
-      if (user) {
+      if (user && user.isActive !== false) {
         const { token, tokenHash } = generateResetToken();
 
         // Requesting a new link replaces the old one (only one is ever valid).
