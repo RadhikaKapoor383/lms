@@ -12,6 +12,10 @@ export interface ISettings extends Document {
   // false -> students can't enroll themselves (free or with a code); only
   // instructors and admins can enroll people.
   allowSelfEnrollment: boolean;
+  // true  -> a new student can verify their email but cannot log in until an
+  //          admin approves the account.
+  // false -> verifying the email is enough (default).
+  requireStudentApproval: boolean;
   updatedBy?: string;
   updatedAt: Date;
 }
@@ -22,6 +26,7 @@ const settingsSchema = new Schema<ISettings>(
     platformName: { type: String, required: true },
     requireCourseApproval: { type: Boolean, default: true },
     allowSelfEnrollment: { type: Boolean, default: true },
+    requireStudentApproval: { type: Boolean, default: false },
     updatedBy: { type: String },
   },
   { timestamps: true }

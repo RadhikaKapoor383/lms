@@ -6,6 +6,7 @@ export interface IPlatformSettings {
   platformName: string;
   requireCourseApproval: boolean;
   allowSelfEnrollment: boolean;
+  requireStudentApproval: boolean;
 }
 
 // Only these fields can be changed through the API, and only with the right
@@ -24,7 +25,11 @@ export const parseSettingsUpdate = (
     update.platformName = name;
   }
 
-  for (const key of ["requireCourseApproval", "allowSelfEnrollment"] as const) {
+  for (const key of [
+    "requireCourseApproval",
+    "allowSelfEnrollment",
+    "requireStudentApproval",
+  ] as const) {
     if (body?.[key] !== undefined) {
       if (typeof body[key] !== "boolean") {
         return { error: `${key} must be true or false` };
