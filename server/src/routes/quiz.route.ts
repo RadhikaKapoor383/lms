@@ -12,6 +12,7 @@ import {
   getCourseQuizzes,
   getQuiz,
   getQuizAttempts,
+  startQuizAttempt,
   submitQuizAttempt,
 } from "../controllers/quiz.controller";
 
@@ -55,6 +56,13 @@ quizRouter.get(
   authorizeRoles("admin", "instructor"),
   authorizeQuizOwner,
   getQuizAttempts
+);
+
+quizRouter.post(
+  "/quizzes/:id/start",
+  isAuthenticated,
+  authorizeRoles("student"),
+  startQuizAttempt
 );
 
 quizRouter.post(
