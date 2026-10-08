@@ -14,6 +14,8 @@ import { redis } from "../utils/redis";
 import { logActivity } from "../utils/auditLog";
 import { isObjectId } from "../services/enrollment.service";
 import { notifyUser } from "../services/notification.service";
+import { getSettings } from "../services/settings.service";
+import sendMail from "../utils/sendMail";
 import {
   buildCourseStats,
   groupByInstructor,
@@ -59,6 +61,76 @@ export const setUserActive = CatchAsyncError(
       );
 
       res.status(200).json({ success: true, isActive: user.isActive !== false });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Approve / reject a new student -------------------
+// Only used when "Require approval for new students" is on. A student who has
+// verified their email sits at "pending" until an admin decides. Approving lets
+// them log in (and emails them); rejecting keeps the account but blocks login
+// (delete the user afterwards if they should be able to sign up again).
+
+export const setUserApproval = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) {
+        return next(new ErrorHandler("Invalid user id", 400));
+      }
+      if (typeof req.body?.approve !== "boolean") {
+        return next(new ErrorHandler("approve must be true or false", 400));
+      }
+      const approve: boolean = req.body.approve;
+
+      // One atomic step: it only matches a student who is STILL pending, so two
+      // admins clicking at once can't both "decide", and nobody else's account
+      // can be touched through this route.
+      const user = await userModel.findOneAndUpdate(
+        { _id: id, role: "student", approvalStatus: "pending" },
+        { approvalStatus: approve ? "approved" : "rejected" },
+        { new: true }
+      );
+      if (!user) {
+        return next(new ErrorHandler("No pending student found with that id", 404));
+      }
+
+      logActivity(
+        req,
+        approve ? "user.approve" : "user.reject",
+        `${approve ? "Approved" : "Rejected"} student \"${user.name}\" (${user.email})`,
+        { targetUserId: id }
+      );
+
+      // The decision is saved even if the email can't be sent.
+      let emailSent = true;
+      try {
+        const { platformName } = await getSettings();
+        await sendMail({
+          email: user.email,
+          subject: approve
+            ? `Your ${platformName} account is approved`
+            : `Your ${platformName} registration`,
+          template: "account-decision.ejs",
+          data: {
+            user: { name: user.name },
+            approved: approve,
+            platformName,
+            loginUrl: `${process.env.ORIGIN || ""}/login`,
+          },
+        });
+      } catch (mailError: any) {
+        emailSent = false;
+        console.error("Could not send approval email:", mailError.message);
+      }
+
+      res.status(200).json({
+        success: true,
+        approvalStatus: user.approvalStatus,
+        emailSent,
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
