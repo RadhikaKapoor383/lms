@@ -5,6 +5,7 @@ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import QuizModel, { IQuizQuestion } from "../models/quiz.model";
 import QuizAttemptModel from "../models/quizAttempt.model";
+import QuizStartModel from "../models/quizStart.model";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
 import { tryIssueCertificate } from "../services/certificate.service";
@@ -270,15 +271,78 @@ export const getQuiz = CatchAsyncError(
   }
 );
 
+// ------------------- Student: start an attempt (server records the clock) -------------------
+// The time limit is enforced from the start time stored here, never from
+// anything the client sends. Calling this again while an attempt is still
+// running (e.g. a page refresh) returns the ORIGINAL start time, so the clock
+// can't be reset by reloading.
+
+export const startQuizAttempt = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const quiz = await QuizModel.findById(req.params.id);
+      if (!quiz) {
+        return next(new ErrorHandler("Quiz not found", 404));
+      }
+
+      const allowed = await hasCourseContentAccess(
+        req.user?.role,
+        String(req.user?._id),
+        String(quiz.course)
+      );
+      if (!allowed) {
+        return next(new ErrorHandler("You are not eligible to access this course", 404));
+      }
+
+      const attemptsUsed = await QuizAttemptModel.countDocuments({
+        quiz: quiz._id,
+        student: req.user?._id,
+      });
+      if (attemptsUsed >= quiz.maxAttempts) {
+        return next(new ErrorHandler("You've used all your attempts for this quiz", 403));
+      }
+
+      const limitMs = (quiz.timeLimitMinutes ?? 0) * 60 * 1000;
+      const filter = { quiz: quiz._id, student: req.user?._id };
+
+      const existing = await QuizStartModel.findOne(filter);
+
+      // Still running = it exists AND (no time limit OR the limit hasn't passed).
+      // A stale record from an abandoned attempt is replaced below.
+      const stillRunning =
+        !!existing &&
+        (limitMs === 0 || Date.now() < existing.startedAt.getTime() + limitMs);
+
+      let start = existing;
+      if (!stillRunning) {
+        start = await QuizStartModel.findOneAndUpdate(
+          filter,
+          { startedAt: new Date() },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      }
+
+      res.status(200).json({
+        success: true,
+        startedAt: start!.startedAt,
+        expiresAt: limitMs ? new Date(start!.startedAt.getTime() + limitMs) : null,
+        // lets the client compute remaining time without trusting its own clock
+        serverNow: new Date(),
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
 // ------------------- Student: submit an attempt (auto-graded) -------------------
 
 export const submitQuizAttempt = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const quizId = req.params.id;
-      const { answers, startedAt } = req.body as {
+      const { answers } = req.body as {
         answers: { questionId: string; selectedOptionIndexes: number[] }[];
-        startedAt?: string;
       };
 
       if (!Array.isArray(answers)) {
@@ -305,6 +369,26 @@ export const submitQuizAttempt = CatchAsyncError(
       });
       if (attemptsUsed >= quiz.maxAttempts) {
         return next(new ErrorHandler("You've used all your attempts for this quiz", 403));
+      }
+
+      // The start time comes from OUR record, not the request body.
+      // findOneAndDelete is atomic: if two submits race, only one gets the
+      // record, so a double-submit can't sneak past maxAttempts.
+      const start = await QuizStartModel.findOneAndDelete({
+        quiz: quizId,
+        student: req.user?._id,
+      });
+      if (!start) {
+        return next(new ErrorHandler("Start the quiz before submitting", 400));
+      }
+
+      if (quiz.timeLimitMinutes) {
+        const GRACE_MS = 10 * 1000; // network delay allowance
+        const deadline =
+          start.startedAt.getTime() + quiz.timeLimitMinutes * 60 * 1000 + GRACE_MS;
+        if (Date.now() > deadline) {
+          return next(new ErrorHandler("Time is up - this attempt can't be submitted", 403));
+        }
       }
 
       const answerByQuestion = new Map(
@@ -344,7 +428,7 @@ export const submitQuizAttempt = CatchAsyncError(
         percentage,
         passed,
         attemptNumber: attemptsUsed + 1,
-        startedAt: startedAt ? new Date(startedAt) : new Date(),
+        startedAt: start.startedAt,
         submittedAt: new Date(),
       });
 
