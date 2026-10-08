@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from "express";
 export const app = express();
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -26,8 +27,37 @@ import reportRouter from "./routes/report.route";
 import adminManagementRouter from "./routes/adminManagement.route";
 import dashboardRouter from "./routes/dashboard.route";
 
+// Behind a reverse proxy (Render, Railway, nginx...) every request looks like it
+// comes from the proxy's IP unless Express is told how many proxies to trust.
+// Set TRUST_PROXY to the NUMBER of proxy hops (usually 1). Leave it unset when
+// running without a proxy. Don't use "true": it lets clients fake their IP.
+if (process.env.TRUST_PROXY) {
+  const v = process.env.TRUST_PROXY;
+  app.set("trust proxy", /^\d+$/.test(v) ? Number(v) : v);
+}
+
+// Standard security headers (no sniffing, no framing, HSTS in production, ...)
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
 // body parser
-app.use(express.json({ limit: "50mb" }));
+// Most requests are tiny JSON, so the default limit is small. Only the routes
+// that carry a base64 image (course thumbnail, avatar, layout banners) get a
+// bigger one - a 50 MB limit everywhere lets anyone make the server buffer
+// 50 MB per request.
+const smallJson = express.json({ limit: "1mb" });
+const imageJson = express.json({ limit: "10mb" });
+const IMAGE_BODY_ROUTES = [
+  /^\/api\/v1\/create-course$/,
+  /^\/api\/v1\/edit-course\/[^/]+$/,
+  /^\/api\/v1\/update-user-avatar$/,
+  /^\/api\/v1\/create-layout$/,
+  /^\/api\/v1\/edit-layout$/,
+];
+app.use((req: Request, res: Response, next: NextFunction) =>
+  IMAGE_BODY_ROUTES.some((r) => r.test(req.path))
+    ? imageJson(req, res, next)
+    : smallJson(req, res, next)
+);
 
 // cookie parser
 app.use(cookieParser());

@@ -9,6 +9,7 @@ const toResponse = (s: any) => ({
   platformName: s.platformName,
   requireCourseApproval: s.requireCourseApproval,
   allowSelfEnrollment: s.allowSelfEnrollment,
+  requireStudentApproval: s.requireStudentApproval,
   updatedAt: s.updatedAt,
 });
 

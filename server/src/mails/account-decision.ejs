@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title><%= approved ? "Account approved" : "Registration update" %></title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f7; padding: 24px;">
+  <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 32px;">
+    <% if (approved) { %>
+      <h2 style="color: #1a1a1a;">You're in, <%= user.name %>!</h2>
+      <p>An administrator has approved your <%= platformName %> account. You can log in now and start learning.</p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="<%= loginUrl %>" style="background: #e1a93a; color: #1a1a1a; text-decoration: none; padding: 12px 28px; border-radius: 999px; font-weight: bold;">Log in</a>
+      </p>
+    <% } else { %>
+      <h2 style="color: #1a1a1a;">Hello <%= user.name %>,</h2>
+      <p>Thanks for registering with <%= platformName %>. Unfortunately an administrator did not approve your registration this time.</p>
+      <p>If you think this is a mistake, please contact the platform administrator.</p>
+    <% } %>
+  </div>
+</body>
+</html>
