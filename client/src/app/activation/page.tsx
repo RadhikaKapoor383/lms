@@ -7,14 +7,17 @@ import Footer from "@/components/Footer";
 import { useAppSelector } from "@/hooks/redux";
 import { useActivationMutation } from "@/redux/features/auth/authApi";
 
+const CODE_LENGTH = 6;
+
 export default function ActivationPage() {
   const router = useRouter();
   const { token } = useAppSelector((state) => state.auth);
   const [activation, { isLoading }] = useActivationMutation();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
 
-  const [digits, setDigits] = useState(["", "", "", ""]);
+  const [digits, setDigits] = useState(Array(CODE_LENGTH).fill(""));
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const handleChange = (index: number, value: string) => {
@@ -22,7 +25,7 @@ export default function ActivationPage() {
     const next = [...digits];
     next[index] = value;
     setDigits(next);
-    if (value && index < 3) {
+    if (value && index < CODE_LENGTH - 1) {
       inputsRef.current[index + 1]?.focus();
     }
   };
@@ -32,8 +35,8 @@ export default function ActivationPage() {
     setError("");
     const activation_code = digits.join("");
 
-    if (activation_code.length !== 4) {
-      setError("Enter the full 4-digit code");
+    if (activation_code.length !== CODE_LENGTH) {
+      setError(`Enter the full ${CODE_LENGTH}-digit code`);
       return;
     }
 
@@ -43,9 +46,11 @@ export default function ActivationPage() {
     }
 
     try {
-      await activation({ activation_token: token, activation_code }).unwrap();
+      const res: any = await activation({ activation_token: token, activation_code }).unwrap();
+      setPendingApproval(!!res?.pendingApproval);
       setSuccess(true);
-      setTimeout(() => router.push("/login"), 1500);
+      // Someone waiting for approval can't log in yet, so give them time to read why.
+      setTimeout(() => router.push("/login"), res?.pendingApproval ? 6000 : 1500);
     } catch (err: any) {
       setError(err?.data?.message || "Invalid or expired code");
     }
@@ -59,11 +64,11 @@ export default function ActivationPage() {
           Check your email
         </h1>
         <p className="mt-2 text-ink/70 dark:text-parchment/70">
-          Enter the 4-digit code we just sent you. It expires in 5 minutes.
+          Enter the 6-digit code we just sent you. It expires in 5 minutes.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div className="flex justify-between gap-3">
+          <div className="flex justify-between gap-2">
             {digits.map((digit, i) => (
               <input
                 key={i}
@@ -75,7 +80,7 @@ export default function ActivationPage() {
                 maxLength={1}
                 value={digit}
                 onChange={(e) => handleChange(i, e.target.value)}
-                className="h-14 w-14 border border-parchment-dark bg-transparent text-center font-display text-2xl outline-none focus:border-mustard dark:border-ink-light"
+                className="h-12 w-12 border border-parchment-dark bg-transparent text-center font-display text-2xl outline-none focus:border-mustard dark:border-ink-light"
               />
             ))}
           </div>
@@ -83,7 +88,9 @@ export default function ActivationPage() {
           {error && <p className="text-sm text-clay">{error}</p>}
           {success && (
             <p className="text-sm text-ink-light dark:text-mustard">
-              Account activated — redirecting to login...
+              {pendingApproval
+                ? "Email verified. An administrator needs to approve your account before you can log in - we'll email you as soon as it's done."
+                : "Account activated — redirecting to login..."}
             </p>
           )}
 
