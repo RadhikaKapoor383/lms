@@ -6,6 +6,7 @@ import {
   useDeleteUserAdminMutation,
   useGetAllUsersAdminQuery,
   useSetUserActiveMutation,
+  useSetUserApprovalMutation,
   useUpdateUserRoleMutation,
 } from "@/redux/features/users/usersApi";
 import { useAppSelector } from "@/hooks/redux";
@@ -18,6 +19,7 @@ export default function AdminUsersPage() {
   const [updateRole] = useUpdateUserRoleMutation();
   const [deleteUser] = useDeleteUserAdminMutation();
   const [setUserActive] = useSetUserActiveMutation();
+  const [setUserApproval] = useSetUserApprovalMutation();
   const { user: currentUser } = useAppSelector((state) => state.auth);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState("");
@@ -47,11 +49,40 @@ export default function AdminUsersPage() {
     }
   };
 
-  const users = data?.users || [];
+  const handleApproval = async (u: any, approve: boolean) => {
+    if (
+      !approve &&
+      !window.confirm(`Reject ${u.name}? They won't be able to log in. (Delete the account afterwards if they should be able to sign up again.)`)
+    ) {
+      return;
+    }
+    setRoleError("");
+    try {
+      const res: any = await setUserApproval({ id: u._id, approve }).unwrap();
+      if (res?.emailSent === false) {
+        setRoleError(`Saved, but the email to ${u.email} could not be sent.`);
+      }
+    } catch (err: any) {
+      setRoleError(err?.data?.message || "Could not save the decision");
+    }
+  };
+
+  // students waiting for a decision come first
+  const users = [...(data?.users || [])].sort(
+    (a: any, b: any) =>
+      Number(b.approvalStatus === "pending") - Number(a.approvalStatus === "pending")
+  );
+  const pendingCount = users.filter((u: any) => u.approvalStatus === "pending").length;
 
   return (
     <div>
       <h1 className="font-display text-3xl text-ink dark:text-parchment">Users</h1>
+
+      {pendingCount > 0 && (
+        <p className="mt-3 text-sm text-mustard-dark dark:text-mustard">
+          {pendingCount} student{pendingCount === 1 ? " is" : "s are"} waiting for your approval.
+        </p>
+      )}
 
       {isLoading && <Loader />}
       {roleError && <p className="mt-3 text-sm text-clay">{roleError}</p>}
@@ -65,6 +96,16 @@ export default function AdminUsersPage() {
             <div>
               <p className="font-medium text-ink dark:text-parchment">
                 {u.name}
+                {u.approvalStatus === "pending" && (
+                  <span className="ml-3 rounded-full bg-mustard/20 px-2.5 py-0.5 text-xs font-normal text-mustard-dark dark:text-mustard">
+                    Pending approval
+                  </span>
+                )}
+                {u.approvalStatus === "rejected" && (
+                  <span className="ml-3 rounded-full bg-clay/20 px-2.5 py-0.5 text-xs font-normal text-clay">
+                    Rejected
+                  </span>
+                )}
                 {u.isActive === false && (
                   <span className="ml-3 rounded-full bg-clay/20 px-2.5 py-0.5 text-xs font-normal text-clay">
                     Deactivated
@@ -87,7 +128,24 @@ export default function AdminUsersPage() {
                 ))}
               </select>
 
-              {u._id !== currentUser?._id && (
+              {u.approvalStatus === "pending" && (
+                <>
+                  <button
+                    onClick={() => handleApproval(u, true)}
+                    className="text-sm font-medium text-mustard-dark hover:underline dark:text-mustard"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleApproval(u, false)}
+                    className="text-sm text-clay hover:underline"
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
+
+              {u._id !== currentUser?._id && u.approvalStatus !== "pending" && (
                 <button
                   onClick={() => handleActive(u)}
                   className="text-sm text-mustard-dark hover:underline dark:text-mustard"
