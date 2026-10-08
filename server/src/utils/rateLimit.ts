@@ -47,3 +47,29 @@ export const hitRateLimit = async (
     return { allowed: true, retryAfterSeconds: 0 };
   }
 };
+
+// Look at a counter WITHOUT adding to it. Lets a caller refuse early ("you're
+// locked out") and only count real failures with hitRateLimit afterwards.
+export const isRateLimited = async (
+  key: string,
+  limit: number
+): Promise<IRateLimitResult> => {
+  try {
+    const redisKey = `rl:${key}`;
+    const count = parseInt((await redis.get(redisKey)) || "0", 10);
+    if (count < limit) return { allowed: true, retryAfterSeconds: 0 };
+    return decideRateLimit(limit + 1, limit, await redis.ttl(redisKey));
+  } catch (error: any) {
+    console.error("Rate limit check failed (allowing the request):", error.message);
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+};
+
+// Forget a counter (e.g. after a successful login).
+export const clearRateLimit = async (key: string): Promise<void> => {
+  try {
+    await redis.del(`rl:${key}`);
+  } catch {
+    /* nothing to clear */
+  }
+};
