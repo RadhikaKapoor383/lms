@@ -1,14 +1,14 @@
 // One place that decides what a valid new password is, used by registration,
 // "change password" and "reset password".
 //
-// Minimum 6 matches the model and the client forms. Raise MIN_LENGTH here (and
+// Minimum 8 matches the model and the client forms. Raise MIN_LENGTH here (and
 // in client/src/utils/validationSchemas.ts) to tighten it everywhere at once.
 //
 // The maximum is 72 BYTES because bcrypt silently ignores everything after the
 // 72nd byte: without a cap, two long passwords that differ only past that point
 // would be treated as the same password.
 
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_BYTES = 72;
 
 // Returns an error message, or null when the password is acceptable.
