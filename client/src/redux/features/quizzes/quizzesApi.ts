@@ -58,19 +58,26 @@ export const quizzesApi = apiSlice.injectEndpoints({
       providesTags: ["Quizzes"],
     }),
 
+    // Asks the server to record the start time (the server owns the clock).
+    startQuizAttempt: builder.mutation({
+      query: (quizId: string) => ({
+        url: `quizzes/${quizId}/start`,
+        method: "POST",
+        credentials: "include",
+      }),
+    }),
+
     submitQuizAttempt: builder.mutation({
       query: ({
         quizId,
         answers,
-        startedAt,
       }: {
         quizId: string;
         answers: { questionId: string; selectedOptionIndexes: number[] }[];
-        startedAt: string;
       }) => ({
         url: `quizzes/${quizId}/attempts`,
         method: "POST",
-        body: { answers, startedAt },
+        body: { answers },
         credentials: "include",
       }),
       invalidatesTags: ["Quizzes", "Certificates"],
@@ -85,5 +92,6 @@ export const {
   useEditQuizMutation,
   useDeleteQuizMutation,
   useGetQuizAttemptsQuery,
+  useStartQuizAttemptMutation,
   useSubmitQuizAttemptMutation,
 } = quizzesApi;

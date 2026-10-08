@@ -6,7 +6,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
-import { useGetQuizQuery, useSubmitQuizAttemptMutation } from "@/redux/features/quizzes/quizzesApi";
+import {
+  useGetQuizQuery,
+  useStartQuizAttemptMutation,
+  useSubmitQuizAttemptMutation,
+} from "@/redux/features/quizzes/quizzesApi";
 
 export default function TakeQuizPage() {
   const params = useParams();
@@ -15,21 +19,34 @@ export default function TakeQuizPage() {
   const quizId = params?.quizId as string;
 
   const { data, isLoading, isError } = useGetQuizQuery(quizId);
+  const [startAttempt] = useStartQuizAttemptMutation();
   const [submitAttempt, { isLoading: isSubmitting }] = useSubmitQuizAttemptMutation();
 
   const quiz = data?.quiz;
   const [answers, setAnswers] = useState<Record<string, Set<number>>>({});
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
-  const startedAtRef = useRef(new Date().toISOString());
+  const startedRef = useRef(false);
 
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
+  // Tell the server we've started; it records the clock and sends back when
+  // time runs out. Remaining time = expiresAt - serverNow, so a wrong clock on
+  // the student's device can't change the timer. Reloading the page returns the
+  // ORIGINAL start time, so the clock can't be reset.
   useEffect(() => {
-    if (quiz?.timeLimitMinutes) {
-      setSecondsLeft(quiz.timeLimitMinutes * 60);
-    }
-  }, [quiz?.timeLimitMinutes]);
+    if (!quiz || startedRef.current) return;
+    startedRef.current = true;
+    startAttempt(quizId)
+      .unwrap()
+      .then((res: any) => {
+        if (res.expiresAt) {
+          const ms = new Date(res.expiresAt).getTime() - new Date(res.serverNow).getTime();
+          setSecondsLeft(Math.max(0, Math.ceil(ms / 1000)));
+        }
+      })
+      .catch((err: any) => setError(err?.data?.message || "Could not start the quiz"));
+  }, [quiz, quizId, startAttempt]);
 
   const handleSubmit = async () => {
     setError("");
@@ -41,7 +58,6 @@ export default function TakeQuizPage() {
       const res = await submitAttempt({
         quizId,
         answers: payload,
-        startedAt: startedAtRef.current,
       }).unwrap();
       setResult(res);
     } catch (err: any) {
