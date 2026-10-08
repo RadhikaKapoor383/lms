@@ -6,6 +6,7 @@ import {
   getInstructorDetail,
   getInstructors,
   setUserActive,
+  setUserApproval,
 } from "../controllers/adminManagement.controller";
 
 const adminManagementRouter = express.Router();
@@ -13,6 +14,7 @@ const adminManagementRouter = express.Router();
 const adminOnly = [isAuthenticated, authorizeRoles("admin")];
 
 adminManagementRouter.put("/admin/users/:id/status", ...adminOnly, setUserActive);
+adminManagementRouter.put("/admin/users/:id/approval", ...adminOnly, setUserApproval);
 
 adminManagementRouter.get("/admin/instructors", ...adminOnly, getInstructors);
 adminManagementRouter.get("/admin/instructors/:id", ...adminOnly, getInstructorDetail);
