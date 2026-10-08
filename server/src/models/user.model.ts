@@ -11,6 +11,12 @@ const emailRegexPattern: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const USER_ROLES = ["admin", "instructor", "student"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+// "pending" / "rejected" only ever apply when the platform requires admin
+// approval for new students. Accounts created before this field existed have
+// none, which counts as approved.
+export const APPROVAL_STATUSES = ["approved", "pending", "rejected"] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -24,6 +30,7 @@ export interface IUser extends Document {
   // false = deactivated by an admin: cannot log in and is signed out at once.
   // Accounts created before this field existed have none, which counts as active.
   isActive?: boolean;
+  approvalStatus?: ApprovalStatus;
   createdAt?: Date; // added by the schema's timestamps option
   // SHA-256 of the emailed reset token (never the token itself) and its expiry.
   passwordResetToken?: string;
@@ -51,7 +58,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     },
     password: {
       type: String,
-      minlength: [6, "Password must be at least 6 characters"],
+      minlength: [8, "Password must be at least 8 characters"],
       select: false,
       // Not required: social-auth users don't have a local password
     },
@@ -69,6 +76,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       default: false,
     },
     isActive: { type: Boolean, default: true },
+    approvalStatus: { type: String, enum: APPROVAL_STATUSES, default: "approved" },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
     courses: [

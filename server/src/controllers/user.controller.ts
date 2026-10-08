@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import cloudinary from "cloudinary";
 import mongoose from "mongoose";
+import crypto from "crypto";
 
 import userModel, { IUser, USER_ROLES } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
@@ -19,7 +20,12 @@ import {
 import { redis } from "../utils/redis";
 import { logActivity } from "../utils/auditLog";
 import { validatePassword } from "../utils/passwordPolicy";
-import { hashKeyPart, hitRateLimit } from "../utils/rateLimit";
+import {
+  clearRateLimit,
+  hashKeyPart,
+  hitRateLimit,
+  isRateLimited,
+} from "../utils/rateLimit";
 import {
   RESET_EXPIRE_MINUTES,
   buildResetUrl,
@@ -28,7 +34,8 @@ import {
   looksLikeResetToken,
   resetExpiryFrom,
 } from "../services/passwordReset.service";
-import { notifyUser } from "../services/notification.service";
+import { notifyUser, notifyUsers } from "../services/notification.service";
+import { getSettings } from "../services/settings.service";
 
 // ------------------- Registration -------------------
 
@@ -45,17 +52,47 @@ interface IActivationToken {
   activationCode: string;
 }
 
+const ACTIVATION_CODE_DIGITS = 6;
+
+// The emailed code must NOT be readable from the token. A JWT payload is only
+// signed, not encrypted: anyone holding the token (and the registration
+// response hands it to whoever registered) can base64-decode it. So the token
+// stores a keyed HASH of the code, and the real code only ever goes by email.
+const hashActivationCode = (code: string, nonce: string): string =>
+  crypto
+    .createHmac("sha256", process.env.ACTIVATION_SECRET as string)
+    .update(`${nonce}:${code}`)
+    .digest("hex");
+
 export const createActivationToken = (user: IRegistrationBody): IActivationToken => {
-  const activationCode = Math.floor(1000 + Math.random() * 9000).toString();
+  const activationCode = crypto
+    .randomInt(0, 10 ** ACTIVATION_CODE_DIGITS)
+    .toString()
+    .padStart(ACTIVATION_CODE_DIGITS, "0");
+  const nonce = crypto.randomBytes(16).toString("hex");
 
   const token = jwt.sign(
-    { user, activationCode },
+    { user, nonce, codeHash: hashActivationCode(activationCode, nonce) },
     process.env.ACTIVATION_SECRET as Secret,
     { expiresIn: "5m" }
   );
 
   return { token, activationCode };
 };
+
+// Shared "slow down" error for rate-limited endpoints.
+const tooManyRequests = (what: string, retryAfterSeconds: number) => {
+  const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+  return new ErrorHandler(
+    `Too many ${what}. Try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+    429
+  );
+};
+
+// IP is only a coarse second line of defence (behind a proxy it needs
+// TRUST_PROXY to be right - see app.ts), so its limits are generous.
+const ipKeyPart = (req: Request): string | null =>
+  req.ip ? hashKeyPart(req.ip) : null;
 
 export const registrationUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -73,6 +110,24 @@ export const registrationUser = CatchAsyncError(
       const passwordProblem = validatePassword(password);
       if (passwordProblem) {
         return next(new ErrorHandler(passwordProblem, 400));
+      }
+
+      // Every registration sends an email, so cap it per address (stops someone
+      // flooding a stranger's inbox) and per IP (stops mass sign-ups).
+      const emailLimit = await hitRateLimit(
+        `register:${hashKeyPart(email.trim().toLowerCase())}`,
+        5,
+        60 * 60
+      );
+      if (!emailLimit.allowed) {
+        return next(tooManyRequests("sign-up attempts for this email", emailLimit.retryAfterSeconds));
+      }
+      const ipPart = ipKeyPart(req);
+      if (ipPart) {
+        const ipLimit = await hitRateLimit(`register-ip:${ipPart}`, 20, 60 * 60);
+        if (!ipLimit.allowed) {
+          return next(tooManyRequests("sign-up attempts", ipLimit.retryAfterSeconds));
+        }
       }
 
       const isEmailExist = await userModel.findOne({ email });
@@ -119,29 +174,75 @@ interface IActivationRequest {
 export const activateUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { activation_token, activation_code } =
-        req.body as IActivationRequest;
+      const { activation_token, activation_code } = req.body ?? {};
 
-      const newUser: { user: IRegistrationBody; activationCode: string } =
-        jwt.verify(
-          activation_token,
-          process.env.ACTIVATION_SECRET as string
-        ) as { user: IRegistrationBody; activationCode: string };
+      if (typeof activation_token !== "string" || typeof activation_code !== "string") {
+        return next(new ErrorHandler("Activation token and code are required", 400));
+      }
 
-      if (newUser.activationCode !== activation_code) {
+      // A code is only a few digits, so cap the guesses per token.
+      const ATTEMPT_LIMIT = 5;
+      const attemptKey = `activate:${hashKeyPart(activation_token)}`;
+      const locked = await isRateLimited(attemptKey, ATTEMPT_LIMIT);
+      if (!locked.allowed) {
+        return next(tooManyRequests("wrong codes", locked.retryAfterSeconds));
+      }
+
+      const payload = jwt.verify(
+        activation_token,
+        process.env.ACTIVATION_SECRET as string
+      ) as {
+        user: IRegistrationBody;
+        nonce?: string;
+        codeHash?: string;
+      };
+
+      if (!payload.nonce || !payload.codeHash) {
+        return next(new ErrorHandler("Activation link is out of date - please sign up again", 400));
+      }
+
+      const expected = Buffer.from(payload.codeHash, "hex");
+      const given = Buffer.from(hashActivationCode(activation_code.trim(), payload.nonce), "hex");
+      const codeIsValid =
+        expected.length === given.length && crypto.timingSafeEqual(expected, given);
+
+      if (!codeIsValid) {
+        await hitRateLimit(attemptKey, ATTEMPT_LIMIT, 10 * 60);
         return next(new ErrorHandler("Invalid activation code", 400));
       }
 
-      const { name, email, password } = newUser.user;
+      const { name, email, password } = payload.user;
 
       const existUser = await userModel.findOne({ email });
       if (existUser) {
         return next(new ErrorHandler("Email already exists", 400));
       }
 
-      const user = await userModel.create({ name, email, password });
+      // Email is verified now. Whether the student can log in yet depends on
+      // the platform setting.
+      const needsApproval = (await getSettings()).requireStudentApproval;
 
-      res.status(201).json({ success: true, user });
+      const user = await userModel.create({
+        name,
+        email,
+        password,
+        isVerified: true,
+        approvalStatus: needsApproval ? "pending" : "approved",
+      });
+
+      if (needsApproval) {
+        const admins = await userModel
+          .find({ role: "admin", isActive: { $ne: false } })
+          .select("_id");
+        await notifyUsers(
+          admins.map((a) => String(a._id)),
+          "New student awaiting approval",
+          `${name} (${email}) verified their email and needs your approval`,
+          "/admin/users"
+        );
+      }
+
+      res.status(201).json({ success: true, user, pendingApproval: needsApproval });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
@@ -158,20 +259,51 @@ interface ILoginRequest {
 export const loginUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, password } = req.body as ILoginRequest;
+      const { email, password } = (req.body ?? {}) as ILoginRequest;
 
-      if (!email || !password) {
+      // Must be plain strings: an object like {"$ne": null} would otherwise be
+      // handed to MongoDB as a query operator.
+      if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
         return next(new ErrorHandler("Please enter email and password", 400));
       }
 
+      // Only FAILED logins are counted, per email (a stranger can't lock you
+      // out by merely visiting) with a generous per-IP cap on top.
+      const EMAIL_FAIL_LIMIT = 10;
+      const IP_FAIL_LIMIT = 100;
+      const WINDOW_SECONDS = 15 * 60;
+      const emailKey = `login:${hashKeyPart(email.trim().toLowerCase())}`;
+      const ipPart = ipKeyPart(req);
+      const ipKey = ipPart ? `login-ip:${ipPart}` : null;
+
+      const emailLocked = await isRateLimited(emailKey, EMAIL_FAIL_LIMIT);
+      if (!emailLocked.allowed) {
+        return next(tooManyRequests("failed logins", emailLocked.retryAfterSeconds));
+      }
+      if (ipKey) {
+        const ipLocked = await isRateLimited(ipKey, IP_FAIL_LIMIT);
+        if (!ipLocked.allowed) {
+          return next(tooManyRequests("failed logins", ipLocked.retryAfterSeconds));
+        }
+      }
+
+      const recordFailure = async () => {
+        await hitRateLimit(emailKey, EMAIL_FAIL_LIMIT, WINDOW_SECONDS);
+        if (ipKey) await hitRateLimit(ipKey, IP_FAIL_LIMIT, WINDOW_SECONDS);
+      };
+
       const user = await userModel.findOne({ email }).select("+password");
 
+      // Same message and same counting whether the email exists or not, so the
+      // response doesn't reveal which emails have accounts.
       if (!user) {
+        await recordFailure();
         return next(new ErrorHandler("Invalid email or password", 400));
       }
 
       const isPasswordMatch = await user.comparePassword(password);
       if (!isPasswordMatch) {
+        await recordFailure();
         return next(new ErrorHandler("Invalid email or password", 400));
       }
 
@@ -181,6 +313,23 @@ export const loginUser = CatchAsyncError(
         );
       }
 
+      // Only said AFTER the password is right, so it can't be used to probe
+      // which emails are registered.
+      if (user.approvalStatus === "pending") {
+        return next(
+          new ErrorHandler(
+            "Your account is waiting for admin approval. We'll email you as soon as it's approved.",
+            403
+          )
+        );
+      }
+      if (user.approvalStatus === "rejected") {
+        return next(
+          new ErrorHandler("Your registration was not approved. Please contact an administrator.", 403)
+        );
+      }
+
+      await clearRateLimit(emailKey);
       sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
