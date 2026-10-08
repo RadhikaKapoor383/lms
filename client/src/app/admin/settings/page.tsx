@@ -116,6 +116,13 @@ export default function AdminSettingsPage() {
             disabled={isSaving}
             onChange={(value) => save({ allowSelfEnrollment: value })}
           />
+          <Toggle
+            label="Require approval for new students"
+            help="On: a new student can verify their email, but cannot log in until an admin approves the account (you'll see them under Users). Off: verifying the email is enough."
+            checked={!!settings.requireStudentApproval}
+            disabled={isSaving}
+            onChange={(value) => save({ requireStudentApproval: value })}
+          />
         </div>
       )}
     </div>

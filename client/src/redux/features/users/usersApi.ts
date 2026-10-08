@@ -32,6 +32,17 @@ export const usersApi = apiSlice.injectEndpoints({
       invalidatesTags: ["User", "Instructors"],
     }),
 
+    // only for students waiting for approval (when the platform requires it)
+    setUserApproval: builder.mutation({
+      query: ({ id, approve }: { id: string; approve: boolean }) => ({
+        url: `admin/users/${id}/approval`,
+        method: "PUT",
+        body: { approve },
+        credentials: "include",
+      }),
+      invalidatesTags: ["User"],
+    }),
+
     deleteUserAdmin: builder.mutation({
       query: (id: string) => ({
         url: `admin/user/${id}`,
@@ -47,5 +58,6 @@ export const {
   useGetAllUsersAdminQuery,
   useUpdateUserRoleMutation,
   useSetUserActiveMutation,
+  useSetUserApprovalMutation,
   useDeleteUserAdminMutation,
 } = usersApi;
