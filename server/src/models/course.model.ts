@@ -43,6 +43,7 @@ export interface ICourse extends Document {
   // the category migration (or an admin edit) fills it in.
   category?: mongoose.Types.ObjectId;
   level: string;
+  durationHours?: number;
   demoUrl: string;
   benefits: { title: string }[];
   prerequisites: { title: string }[];
@@ -94,6 +95,8 @@ const courseSchema = new Schema<ICourse>(
     },
     category: { type: Schema.Types.ObjectId, ref: "Category", index: true },
     level: { type: String, required: true },
+    // Total learning time in hours (shown on the course page and cards).
+    durationHours: { type: Number, min: 0, max: 10000 },
     demoUrl: { type: String, required: true },
     benefits: [{ title: String }],
     prerequisites: [{ title: String }],

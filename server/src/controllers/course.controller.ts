@@ -27,29 +27,13 @@ import { hasCourseContentAccess, isObjectId } from "../services/enrollment.servi
 import NotificationModel from "../models/notification.model";
 import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
 import { toPublicCourse } from "../utils/publicProfile";
+import { pickCourseFields } from "../services/courseFields.service";
 import { getSettings } from "../services/settings.service";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
 import { logActivity } from "../utils/auditLog";
 
 // ------------------- Role helpers -------------------
-
-// Fields an instructor must never be able to set through the request body.
-// Without this, an instructor could publish their own course (skipping admin
-// approval), hand a course to someone else, or fake ratings/enrollment counts.
-const INSTRUCTOR_LOCKED_FIELDS = [
-  "instructor",
-  "status",
-  "ratings",
-  "purchased",
-  "reviews",
-] as const;
-
-const stripLockedFields = (data: Record<string, any>) => {
-  for (const field of INSTRUCTOR_LOCKED_FIELDS) {
-    delete data[field];
-  }
-};
 
 // When an admin assigns a course to someone, make sure that id is really an instructor.
 const isValidInstructorId = async (id: any): Promise<boolean> => {
@@ -93,14 +77,13 @@ const prepareEnrollmentSettings = async (
 export const uploadCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = { ...req.body };
+      const isAdmin = req.user?.role === "admin";
+      const data = pickCourseFields(req.body, isAdmin);
       const thumbnail = data.thumbnail;
-      const courseData = data.courseData;
-      delete data.courseData;
+      const courseData = req.body.courseData;
 
       if (req.user?.role === "instructor") {
         // Instructor: the course is always theirs and always starts as a Draft
-        stripLockedFields(data);
         data.instructor = req.user._id;
         data.status = "Draft";
       } else if (data.instructor) {
@@ -154,16 +137,15 @@ export const uploadCourse = CatchAsyncError(
 export const editCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = { ...req.body };
+      const isAdmin = req.user?.role === "admin";
+      // Fields an instructor may not touch (the shared CourseForm always sends
+      // "status") are silently left out by the whitelist.
+      const data = pickCourseFields(req.body, isAdmin);
       const thumbnail = data.thumbnail;
-      const hasCourseData = "courseData" in data;
-      const courseData = data.courseData;
-      delete data.courseData;
+      const hasCourseData = "courseData" in (req.body ?? {});
+      const courseData = req.body?.courseData;
 
-      if (req.user?.role === "instructor") {
-        // Silently ignore locked fields (the shared CourseForm always sends "status")
-        stripLockedFields(data);
-      } else if ("instructor" in data) {
+      if (isAdmin && "instructor" in data) {
         // Admin re-assigning the course to another instructor
         if (!data.instructor) {
           delete data.instructor;
@@ -203,7 +185,7 @@ export const editCourse = CatchAsyncError(
       const course = await CourseModel.findByIdAndUpdate(
         courseId,
         { $set: data },
-        { new: true }
+        { new: true, runValidators: true }
       );
 
       if (hasCourseData) {
