@@ -6,6 +6,13 @@ import ErrorHandler from "../utils/ErrorHandler";
 import QuizModel, { IQuizQuestion } from "../models/quiz.model";
 import QuizAttemptModel from "../models/quizAttempt.model";
 import QuizStartModel from "../models/quizStart.model";
+import {
+  MAX_TEXT_ANSWER_LENGTH,
+  isChoiceCorrect,
+  isShortAnswerCorrect,
+  normalizeQuestion,
+  validateQuestion,
+} from "../services/quizGrading.service";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
 import { tryIssueCertificate } from "../services/certificate.service";
@@ -68,12 +75,23 @@ export const createQuiz = CatchAsyncError(
         return next(new ErrorHandler("title and at least one question are required", 400));
       }
       for (const q of questions) {
-        if (!Array.isArray(q.options) || q.options.length < 2) {
-          return next(new ErrorHandler("Every question needs at least 2 options", 400));
+        const problem = validateQuestion(q);
+        if (problem) {
+          return next(new ErrorHandler(problem, 400));
         }
-        if (!q.options.some((o: any) => o.isCorrect)) {
-          return next(new ErrorHandler(`"${q.questionText}" has no correct option set`, 400));
-        }
+      }
+      if (
+        timeLimitMinutes !== undefined &&
+        timeLimitMinutes !== null &&
+        !(Number.isInteger(timeLimitMinutes) && timeLimitMinutes >= 0 && timeLimitMinutes <= 600)
+      ) {
+        return next(new ErrorHandler("Time limit must be 0 to 600 minutes", 400));
+      }
+      if (maxAttempts !== undefined && !(Number.isInteger(maxAttempts) && maxAttempts >= 1 && maxAttempts <= 20)) {
+        return next(new ErrorHandler("Attempts must be a whole number from 1 to 20", 400));
+      }
+      if (passingScore !== undefined && !(typeof passingScore === "number" && passingScore >= 0 && passingScore <= 100)) {
+        return next(new ErrorHandler("Passing score must be between 0 and 100", 400));
       }
 
       const course = await CourseModel.findById(courseId).select("instructor name");
@@ -87,8 +105,8 @@ export const createQuiz = CatchAsyncError(
         instructor,
         title,
         description,
-        questions,
-        timeLimitMinutes,
+        questions: questions.map(normalizeQuestion),
+        timeLimitMinutes: timeLimitMinutes || undefined,
         maxAttempts,
         passingScore,
         randomizeQuestions: !!randomizeQuestions,
@@ -341,11 +359,11 @@ export const submitQuizAttempt = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const quizId = req.params.id;
-      const { answers } = req.body as {
-        answers: { questionId: string; selectedOptionIndexes: number[] }[];
+      const { answers: rawAnswers } = req.body as {
+        answers: { questionId: string; selectedOptionIndexes?: number[]; textAnswer?: string }[];
       };
 
-      if (!Array.isArray(answers)) {
+      if (!Array.isArray(rawAnswers)) {
         return next(new ErrorHandler("answers must be an array", 400));
       }
 
@@ -391,9 +409,21 @@ export const submitQuizAttempt = CatchAsyncError(
         }
       }
 
-      const answerByQuestion = new Map(
-        answers.map((a) => [String(a.questionId), new Set(a.selectedOptionIndexes || [])])
-      );
+      // Keep only the fields we know, with the right types, whatever the
+      // client sent. This is what gets graded AND what gets stored.
+      const answers = rawAnswers
+        .filter((a) => a && typeof a === "object" && typeof a.questionId === "string")
+        .map((a) => ({
+        questionId: a.questionId,
+        selectedOptionIndexes: Array.isArray(a.selectedOptionIndexes)
+          ? a.selectedOptionIndexes.filter((i) => Number.isInteger(i))
+          : [],
+        textAnswer:
+          typeof a.textAnswer === "string"
+            ? a.textAnswer.slice(0, MAX_TEXT_ANSWER_LENGTH)
+            : undefined,
+      }));
+      const answerByQuestion = new Map(answers.map((a) => [String(a.questionId), a]));
 
       let score = 0;
       let totalMarks = 0;
@@ -401,16 +431,19 @@ export const submitQuizAttempt = CatchAsyncError(
       for (const question of quiz.questions) {
         totalMarks += question.marks;
 
-        const selected = answerByQuestion.get(String(question._id)) || new Set<number>();
-        const correctIndexes = new Set(
-          question.options
-            .map((o, i) => (o.isCorrect ? i : -1))
-            .filter((i) => i !== -1)
-        );
+        const given = answerByQuestion.get(String(question._id));
 
-        const isCorrect =
-          selected.size === correctIndexes.size &&
-          [...selected].every((i) => correctIndexes.has(i));
+        let isCorrect: boolean;
+        if (question.type === "shortAnswer") {
+          isCorrect = isShortAnswerCorrect(given?.textAnswer, question.acceptedAnswers || []);
+        } else {
+          const correctIndexes = new Set(
+            question.options
+              .map((o, i) => (o.isCorrect ? i : -1))
+              .filter((i) => i !== -1)
+          );
+          isCorrect = isChoiceCorrect(new Set(given?.selectedOptionIndexes || []), correctIndexes);
+        }
 
         if (isCorrect) score += question.marks;
       }

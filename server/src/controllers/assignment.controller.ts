@@ -11,6 +11,9 @@ import NotificationModel from "../models/notification.model";
 import { notifyCourseStudents } from "../services/notification.service";
 import { hasCourseContentAccess } from "../services/enrollment.service";
 import { logActivity } from "../utils/auditLog";
+import { parseHttpsUrl } from "../utils/safeUrl";
+
+const MAX_SUBMISSION_TEXT = 20000;
 
 // ------------------- Create (admin, or the instructor who owns the course) -------------------
 // Route is keyed by :id = courseId, guarded by authorizeCourseOwner.
@@ -189,7 +192,28 @@ export const submitAssignment = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const assignmentId = req.params.id;
-      const { submissionText, fileUrl } = req.body;
+      const { submissionText: rawText, fileUrl: rawUrl } = req.body ?? {};
+
+      if (rawText !== undefined && rawText !== null && typeof rawText !== "string") {
+        return next(new ErrorHandler("Submission text must be text", 400));
+      }
+      if (typeof rawText === "string" && rawText.length > MAX_SUBMISSION_TEXT) {
+        return next(
+          new ErrorHandler(`Submission text can be at most ${MAX_SUBMISSION_TEXT} characters`, 400)
+        );
+      }
+      const submissionText = typeof rawText === "string" ? rawText.trim() || undefined : undefined;
+
+      // The link is shown to the instructor as a clickable link, so it has to
+      // be a plain https:// link (no javascript:, data:, file: ...).
+      let fileUrl: string | undefined;
+      if (rawUrl !== undefined && rawUrl !== null && rawUrl !== "") {
+        const clean = parseHttpsUrl(rawUrl);
+        if (!clean) {
+          return next(new ErrorHandler("The file link must be a valid https:// link", 400));
+        }
+        fileUrl = clean;
+      }
 
       if (!submissionText && !fileUrl) {
         return next(new ErrorHandler("Submit some text or a file link", 400));
