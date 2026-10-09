@@ -19,7 +19,10 @@ export default function CourseCard({ course }: { course: any }) {
       style={{ borderLeft: `4px solid ${tagColor}` }}
     >
       <div className="flex items-center justify-between px-5 pt-4 text-xs uppercase tracking-wide text-ink/50 dark:text-parchment/50">
-        <span>{course.level}</span>
+        <span>
+          {course.level}
+          {course.durationHours ? ` · ${course.durationHours}h` : ""}
+        </span>
         <span>{categoryName}</span>
       </div>
 

@@ -12,13 +12,21 @@ import {
 import { useGetInstructorCoursesQuery } from "@/redux/features/courses/coursesApi";
 
 type DraftOption = { text: string; isCorrect: boolean };
-type DraftQuestion = { questionText: string; type: "single" | "multiple" | "trueFalse"; marks: number; options: DraftOption[] };
+type DraftQuestion = {
+  questionText: string;
+  type: "single" | "multiple" | "trueFalse" | "shortAnswer";
+  marks: number;
+  options: DraftOption[];
+  // only used by "shortAnswer": every answer that should count as correct
+  acceptedAnswers: string[];
+};
 
 const emptyQuestion = (): DraftQuestion => ({
   questionText: "",
   type: "single",
   marks: 1,
   options: [{ text: "", isCorrect: true }, { text: "", isCorrect: false }],
+  acceptedAnswers: [""],
 });
 
 export default function CourseQuizzesPage() {
@@ -36,6 +44,7 @@ export default function CourseQuizzesPage() {
   const [title, setTitle] = useState("");
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [passingScore, setPassingScore] = useState(60);
+  const [timeLimit, setTimeLimit] = useState(0); // minutes, 0 = no limit
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
   const [questions, setQuestions] = useState<DraftQuestion[]>([emptyQuestion()]);
   const [error, setError] = useState("");
@@ -82,6 +91,7 @@ export default function CourseQuizzesPage() {
     setTitle("");
     setMaxAttempts(1);
     setPassingScore(60);
+    setTimeLimit(0);
     setRandomizeQuestions(false);
     setQuestions([emptyQuestion()]);
   };
@@ -90,15 +100,39 @@ export default function CourseQuizzesPage() {
     e.preventDefault();
     setError("");
     for (const q of questions) {
-      if (!q.options.some((o) => o.isCorrect)) {
+      if (q.type === "shortAnswer") {
+        if (!q.acceptedAnswers.some((a) => a.trim())) {
+          setError(`"${q.questionText || "A question"}" needs at least one accepted answer`);
+          return;
+        }
+      } else if (!q.options.some((o) => o.isCorrect)) {
         setError(`"${q.questionText || "A question"}" needs a correct option marked`);
         return;
       }
     }
+    // Short-answer questions have no options; the other types have no accepted answers.
+    const payloadQuestions = questions.map((q) =>
+      q.type === "shortAnswer"
+        ? {
+            questionText: q.questionText,
+            type: q.type,
+            marks: q.marks,
+            options: [],
+            acceptedAnswers: q.acceptedAnswers.filter((a) => a.trim()),
+          }
+        : { questionText: q.questionText, type: q.type, marks: q.marks, options: q.options }
+    );
     try {
       await createQuiz({
         courseId,
-        data: { title, maxAttempts, passingScore, randomizeQuestions, questions },
+        data: {
+          title,
+          maxAttempts,
+          passingScore,
+          randomizeQuestions,
+          timeLimitMinutes: timeLimit > 0 ? timeLimit : undefined,
+          questions: payloadQuestions,
+        },
       }).unwrap();
       resetForm();
       setShowForm(false);
@@ -135,7 +169,7 @@ export default function CourseQuizzesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <label className="block text-sm font-medium text-ink dark:text-parchment">Max attempts</label>
               <input
@@ -154,6 +188,18 @@ export default function CourseQuizzesPage() {
                 max={100}
                 value={passingScore}
                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink dark:text-parchment">Time limit (min)</label>
+              <input
+                type="number"
+                min={0}
+                max={600}
+                value={timeLimit}
+                onChange={(e) => setTimeLimit(Math.max(0, Number(e.target.value)))}
+                title="0 = no time limit"
                 className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
               />
             </div>
@@ -186,6 +232,7 @@ export default function CourseQuizzesPage() {
                     <option value="single">Single answer</option>
                     <option value="multiple">Multiple answers</option>
                     <option value="trueFalse">True / False</option>
+                    <option value="shortAnswer">Short answer</option>
                   </select>
                   <input
                     type="number"
@@ -202,6 +249,49 @@ export default function CourseQuizzesPage() {
                   )}
                 </div>
 
+                {q.type === "shortAnswer" ? (
+                  <div className="mt-3 space-y-2 pl-2">
+                    <p className="text-xs text-ink/60 dark:text-parchment/60">
+                      Accepted answers. Capital letters and extra spaces are ignored when grading.
+                    </p>
+                    {q.acceptedAnswers.map((a, ai) => (
+                      <div key={ai} className="flex items-center gap-2">
+                        <input
+                          required={ai === 0}
+                          placeholder={`Accepted answer ${ai + 1}`}
+                          value={a}
+                          maxLength={200}
+                          onChange={(e) =>
+                            updateQuestion(qi, {
+                              acceptedAnswers: q.acceptedAnswers.map((x, j) => (j === ai ? e.target.value : x)),
+                            })
+                          }
+                          className="w-full border border-parchment-dark bg-transparent px-3 py-1.5 text-sm outline-none focus:border-mustard dark:border-ink-light"
+                        />
+                        {q.acceptedAnswers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateQuestion(qi, { acceptedAnswers: q.acceptedAnswers.filter((_, j) => j !== ai) })
+                            }
+                            className="text-xs text-clay"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {q.acceptedAnswers.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={() => updateQuestion(qi, { acceptedAnswers: [...q.acceptedAnswers, ""] })}
+                        className="text-xs text-mustard-dark hover:underline dark:text-mustard"
+                      >
+                        + Add another accepted answer
+                      </button>
+                    )}
+                  </div>
+                ) : (
                 <div className="mt-3 space-y-2 pl-2">
                   {q.options.map((o, oi) => (
                     <div key={oi} className="flex items-center gap-2">
@@ -236,6 +326,7 @@ export default function CourseQuizzesPage() {
                     </button>
                   )}
                 </div>
+                )}
               </div>
             ))}
           </div>
