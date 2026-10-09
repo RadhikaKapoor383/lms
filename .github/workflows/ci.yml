@@ -1,0 +1,42 @@
+name: CI
+
+# Runs on every push and pull request: type-checks both apps and runs the
+# server's unit tests. No database, Redis or email account is needed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      # "npm install" (not "ci") so a package.json that is a little ahead of the
+      # lock file still works; commit the updated lock file when you can.
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npx tsc --noEmit
