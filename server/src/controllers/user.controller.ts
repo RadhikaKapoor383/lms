@@ -36,6 +36,7 @@ import {
 } from "../services/passwordReset.service";
 import { notifyUser, notifyUsers } from "../services/notification.service";
 import { getSettings } from "../services/settings.service";
+import { parseProfileUpdate } from "../services/profile.service";
 
 // ------------------- Registration -------------------
 
@@ -448,23 +449,38 @@ interface IUpdateUserInfo {
 export const updateUserInfo = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, email } = req.body as IUpdateUserInfo;
+      const parsed = parseProfileUpdate(req.body);
+      if ("error" in parsed) {
+        return next(new ErrorHandler(parsed.error, 400));
+      }
+
       const userId = String(req.user?._id);
       const user = await userModel.findById(userId);
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
 
-      if (email && user) {
-        const isEmailExist = await userModel.findOne({ email });
-        if (isEmailExist) {
-          return next(new ErrorHandler("Email already exists", 400));
+      const { email } = (req.body ?? {}) as IUpdateUserInfo;
+      if (email !== undefined) {
+        const cleanEmail = typeof email === "string" ? email.trim() : "";
+        if (!EMAIL_PATTERN.test(cleanEmail)) {
+          return next(new ErrorHandler("Please enter a valid email", 400));
         }
-        user.email = email;
+        if (cleanEmail !== user.email) {
+          const isEmailExist = await userModel.findOne({ email: cleanEmail });
+          if (isEmailExist) {
+            return next(new ErrorHandler("Email already exists", 400));
+          }
+          user.email = cleanEmail;
+        }
       }
 
-      if (name && user) {
-        user.name = name;
-      }
+      const { name, bio, expertise } = parsed.update;
+      if (name !== undefined) user.name = name;
+      if (bio !== undefined) user.bio = bio;
+      if (expertise !== undefined) user.expertise = expertise;
 
-      await user?.save();
+      await user.save();
       await redis.set(userId, JSON.stringify(user), "EX", 7 * 24 * 60 * 60);
 
       res.status(200).json({ success: true, user });
