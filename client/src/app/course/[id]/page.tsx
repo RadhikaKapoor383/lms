@@ -155,6 +155,7 @@ export default function CourseDetailsPage() {
           <>
             <p className="text-sm uppercase tracking-wide text-clay">
               {course.category?.name} · {course.level}
+              {course.durationHours ? ` · ${course.durationHours} hours` : ""}
             </p>
             <h1 className="mt-3 font-display text-4xl text-ink dark:text-parchment">
               {course.name}

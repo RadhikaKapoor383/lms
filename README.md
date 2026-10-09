@@ -68,17 +68,26 @@ The README below reflects the current implementation state of the project as it 
 
 ## Remaining gaps / not fully completed yet
 
-The following items from the original assignment specification are still not fully implemented in this project:
+Certificates, discussions, forgot/reset password, review moderation, analytics and profiles all exist now. What is still open compared with the original specification:
 
-- Certificate generation and certificate pages.
-- Full discussion/forum system for courses.
-- Forgot password and reset password flow.
-- Full review moderation workflow.
-- Advanced analytics and reports beyond basic dashboard counts.
-- Full admin/instructor/student profile management pages.
-- Complete end-to-end email verification/reset UX.
+**Content**
+- Uploading PDF / DOC / PPT lesson materials (lessons only take links today) and protected video delivery (signed / expiring URLs).
+- Real PDF download for certificates (they print-to-PDF from the browser; the verification page works).
+- Departments (only categories exist) and a search filter for course duration.
+- Configurable completion requirements per course (the rule is fixed: all lessons + every quiz passed).
 
-These are the next major features to implement if the project is to match the original full-scale LMS specification closely.
+**Platform**
+- Fine-grained permissions (roles exist; there is no per-permission editor).
+- Real-time notifications (Socket.io) - notifications are saved and polled.
+- Global instructor/student pages for all assignments / quizzes / students (today they live inside each course).
+- The old lesson Q&A and the newer Discussions system overlap; one of them should be retired.
+
+**Security follow-ups**
+- Changing your email in your profile does not re-verify the new address.
+- The activation token still carries the (own) password in readable form until the account is activated.
+- Editing a published course does not send it back for approval (a product decision).
+- Refresh tokens are not rotated or individually revoked.
+- Only pure logic has automated tests (`npm test` in `server/`); there are no API-level integration tests yet.
 
 ## Tech stack
 
