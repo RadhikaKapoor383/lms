@@ -12,7 +12,9 @@
     "migrate:modules": "ts-node-dev --transpile-only src/migrate-modules-lessons.ts",
     "migrate:certificates": "ts-node-dev --transpile-only src/migrate-certificates.ts",
     "build": "tsc && cp -r src/mails dist/mails",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -40,6 +42,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.15",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vitest": "^2.1.8"
   }
 }
