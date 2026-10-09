@@ -7,6 +7,8 @@ export interface IQuizAnswer {
   // own options stay in a fixed order, so an index here is always valid
   // regardless of how questions were presented.
   selectedOptionIndexes: number[];
+  // The student's typed answer to a "shortAnswer" question.
+  textAnswer?: string;
 }
 
 // One document per attempt - unlike AssignmentSubmission, a quiz allows more
@@ -29,6 +31,7 @@ const quizAnswerSchema = new Schema<IQuizAnswer>(
   {
     questionId: { type: Schema.Types.ObjectId, required: true },
     selectedOptionIndexes: [{ type: Number }],
+    textAnswer: { type: String, maxlength: 500 },
   },
   { _id: false }
 );
