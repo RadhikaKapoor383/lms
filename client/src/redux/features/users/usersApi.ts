@@ -1,4 +1,5 @@
 import { apiSlice } from "../api/apiSlice";
+import { userLoggedIn } from "../auth/authSlice";
 
 export const usersApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -32,6 +33,26 @@ export const usersApi = apiSlice.injectEndpoints({
       invalidatesTags: ["User", "Instructors"],
     }),
 
+    // The logged-in person editing their own name / bio / expertise.
+    // On success the user stored in redux is replaced, so the page updates.
+    updateProfile: builder.mutation({
+      query: (body: { name?: string; bio?: string; expertise?: string[] }) => ({
+        url: "update-user-info",
+        method: "PUT",
+        body,
+        credentials: "include",
+      }),
+      async onQueryStarted(_arg, { queryFulfilled, dispatch, getState }) {
+        try {
+          const { data } = await queryFulfilled;
+          const token = (getState() as any).auth.token;
+          dispatch(userLoggedIn({ accessToken: token, user: data.user }));
+        } catch {
+          /* the page shows the error */
+        }
+      },
+    }),
+
     // only for students waiting for approval (when the platform requires it)
     setUserApproval: builder.mutation({
       query: ({ id, approve }: { id: string; approve: boolean }) => ({
@@ -59,5 +80,6 @@ export const {
   useUpdateUserRoleMutation,
   useSetUserActiveMutation,
   useSetUserApprovalMutation,
+  useUpdateProfileMutation,
   useDeleteUserAdminMutation,
 } = usersApi;

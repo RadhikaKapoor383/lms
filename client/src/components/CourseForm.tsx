@@ -31,6 +31,7 @@ export type CourseFormValues = {
   // Leaving it blank on edit keeps whatever code is already saved.
   enrollmentCode: string;
   level: string;
+  durationHours: number | ""; // total learning time in hours; "" = not set
   demoUrl: string;
   thumbnail: string; // base64 on create, existing URL on edit unless replaced
   benefits: Benefit[];
@@ -82,6 +83,7 @@ export default function CourseForm({
     enrollmentMode: initialValues?.enrollmentMode || "open",
     enrollmentCode: "",
     level: initialValues?.level || "Beginner",
+    durationHours: initialValues?.durationHours ?? "",
     demoUrl: initialValues?.demoUrl || "",
     thumbnail: initialValues?.thumbnail || "",
     benefits: initialValues?.benefits?.length ? initialValues.benefits : [{ title: "" }],
@@ -311,6 +313,28 @@ export default function CourseForm({
               <option>Advanced</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className={labelClass} htmlFor="durationHours">
+            Total duration (hours)
+          </label>
+          <input
+            id="durationHours"
+            type="number"
+            min={0}
+            max={10000}
+            step="0.5"
+            className={inputClass}
+            placeholder="e.g. 12"
+            value={values.durationHours}
+            onChange={(e) =>
+              setValues((v) => ({
+                ...v,
+                durationHours: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)),
+              }))
+            }
+          />
         </div>
 
         {showStatus && (
