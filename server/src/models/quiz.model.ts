@@ -16,8 +16,11 @@ export interface IQuizQuestion {
   questionText: string;
   // "trueFalse" is just a 2-option "single" underneath - kept as its own
   // label so the client can render it differently, but graded identically.
-  type: "single" | "multiple" | "trueFalse";
+  type: "single" | "multiple" | "trueFalse" | "shortAnswer";
   options: IQuizOption[];
+  // Only for "shortAnswer": the answers that count as correct (compared
+  // ignoring case and extra spaces). Never sent to a student.
+  acceptedAnswers: string[];
   marks: number;
 }
 
@@ -47,11 +50,18 @@ const quizOptionSchema = new Schema<IQuizOption>({
 
 const quizQuestionSchema = new Schema<IQuizQuestion>({
   questionText: { type: String, required: true },
-  type: { type: String, enum: ["single", "multiple", "trueFalse"], default: "single" },
+  type: {
+    type: String,
+    enum: ["single", "multiple", "trueFalse", "shortAnswer"],
+    default: "single",
+  },
+  acceptedAnswers: { type: [String], default: [] },
   options: {
     type: [quizOptionSchema],
     validate: {
-      validator: (opts: IQuizOption[]) => opts.length >= 2,
+      // short-answer questions have no options; the per-type rules are
+      // checked in validateQuestion before a quiz is saved
+      validator: (opts: IQuizOption[]) => opts.length === 0 || opts.length >= 2,
       message: "A question needs at least 2 options",
     },
   },

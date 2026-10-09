@@ -31,6 +31,8 @@ export interface IUser extends Document {
   // Accounts created before this field existed have none, which counts as active.
   isActive?: boolean;
   approvalStatus?: ApprovalStatus;
+  bio?: string;
+  expertise?: string[];
   createdAt?: Date; // added by the schema's timestamps option
   // SHA-256 of the emailed reset token (never the token itself) and its expiry.
   passwordResetToken?: string;
@@ -77,6 +79,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     },
     isActive: { type: Boolean, default: true },
     approvalStatus: { type: String, enum: APPROVAL_STATUSES, default: "approved" },
+    bio: { type: String, maxlength: 500, default: "" },
+    expertise: { type: [String], default: [] },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
     courses: [
