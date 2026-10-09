@@ -24,6 +24,8 @@ export default function TakeQuizPage() {
 
   const quiz = data?.quiz;
   const [answers, setAnswers] = useState<Record<string, Set<number>>>({});
+  // typed answers for "shortAnswer" questions, by question id
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const startedRef = useRef(false);
@@ -51,10 +53,11 @@ export default function TakeQuizPage() {
   const handleSubmit = async () => {
     setError("");
     try {
-      const payload = Object.entries(answers).map(([questionId, selected]) => ({
-        questionId,
-        selectedOptionIndexes: [...selected],
-      }));
+      const payload = quiz.questions.map((q: any) =>
+        q.type === "shortAnswer"
+          ? { questionId: q._id, selectedOptionIndexes: [], textAnswer: textAnswers[q._id] || "" }
+          : { questionId: q._id, selectedOptionIndexes: [...(answers[q._id] || [])] }
+      );
       const res = await submitAttempt({
         quizId,
         answers: payload,
@@ -91,8 +94,14 @@ export default function TakeQuizPage() {
   };
 
   const allAnswered = useMemo(
-    () => !!quiz && quiz.questions.every((q: any) => (answers[q._id]?.size || 0) > 0),
-    [quiz, answers]
+    () =>
+      !!quiz &&
+      quiz.questions.every((q: any) =>
+        q.type === "shortAnswer"
+          ? (textAnswers[q._id] || "").trim().length > 0
+          : (answers[q._id]?.size || 0) > 0
+      ),
+    [quiz, answers, textAnswers]
   );
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -172,6 +181,17 @@ export default function TakeQuizPage() {
                   ({q.marks} mark{q.marks === 1 ? "" : "s"})
                 </span>
               </p>
+              {q.type === "shortAnswer" ? (
+                <input
+                  type="text"
+                  maxLength={500}
+                  value={textAnswers[q._id] || ""}
+                  onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q._id]: e.target.value }))}
+                  placeholder="Type your answer"
+                  aria-label={`Answer to question ${i + 1}`}
+                  className="mt-3 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
+                />
+              ) : (
               <div className="mt-3 space-y-2 pl-1">
                 {q.options.map((o: any, oi: number) => (
                   <label key={o._id} className="flex items-center gap-2 text-ink/90 dark:text-parchment/90">
@@ -185,6 +205,7 @@ export default function TakeQuizPage() {
                   </label>
                 ))}
               </div>
+              )}
             </div>
           ))}
         </div>
