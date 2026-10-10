@@ -9,6 +9,8 @@ import {
   evaluateCertificate,
   getEligibilityForStudent,
 } from "../services/certificate.service";
+import { isPdfSafeText, renderCertificatePdf } from "../services/certificatePdf.service";
+import { hashKeyPart, hitRateLimit } from "../utils/rateLimit";
 
 // The shape the certificate page needs - and nothing more. No emails, no
 // internal ids: this same shape is what the public verify page returns.
@@ -42,6 +44,76 @@ export const verifyCertificate = CatchAsyncError(
         success: true,
         certificate: toPublicCertificate(certificate),
       });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Public: download a certificate as a PDF -------------------
+// Same access as verify (anyone holding the unguessable id) and the PDF holds
+// only what the public page already shows. A revoked certificate still
+// downloads, but stamped REVOKED, so an old copy can't pass as valid.
+
+export const downloadCertificatePdf = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Drawing a PDF costs some CPU, so one address can't ask for them endlessly.
+      if (req.ip) {
+        const limit = await hitRateLimit(`cert-pdf:${hashKeyPart(req.ip)}`, 30, 10 * 60);
+        if (!limit.allowed) {
+          return next(new ErrorHandler("Too many downloads. Please try again in a few minutes.", 429));
+        }
+      }
+
+      const certificateId = String(req.params.certificateId || "").trim().toUpperCase();
+      const certificate = await CertificateModel.findOne({ certificateId });
+      if (!certificate) {
+        return next(new ErrorHandler("Certificate not found", 404));
+      }
+
+      if (
+        !isPdfSafeText(
+          certificate.studentName,
+          certificate.courseName,
+          certificate.instructorName,
+          certificate.platformName
+        )
+      ) {
+        return next(
+          new ErrorHandler(
+            "A PDF can't be made for names with non-Latin letters yet. Use Print / Save as PDF on the certificate page instead.",
+            422
+          )
+        );
+      }
+
+      const origin = (process.env.ORIGIN || "").split(",")[0].trim().replace(/\/+$/, "");
+      const pdf = await renderCertificatePdf(
+        {
+          certificateId: certificate.certificateId,
+          studentName: certificate.studentName,
+          courseName: certificate.courseName,
+          instructorName: certificate.instructorName,
+          platformName: certificate.platformName,
+          completionDate: certificate.completionDate,
+          issuedAt: certificate.issuedAt,
+          status: certificate.status,
+          revokedAt: certificate.revokedAt,
+        },
+        `${origin}/certificates/${certificate.certificateId}`
+      );
+
+      res.status(200);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="certificate-${certificate.certificateId}.pdf"`
+      );
+      res.setHeader("Content-Length", String(pdf.length));
+      // Revocation must show up immediately, so never serve a stale copy.
+      res.setHeader("Cache-Control", "no-store");
+      res.end(pdf);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
