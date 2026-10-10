@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import cloudinary from "cloudinary";
 import mongoose from "mongoose";
-import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 import userModel, { IUser, USER_ROLES } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
@@ -36,11 +36,14 @@ import {
 } from "../services/passwordReset.service";
 import { notifyUser, notifyUsers } from "../services/notification.service";
 import { getSettings } from "../services/settings.service";
-import { parseProfileUpdate } from "../services/profile.service";
+import {
+  EMAIL_PATTERN,
+  parseEmailChangeRequest,
+  parseProfileUpdate,
+} from "../services/profile.service";
+import { checkCodeToken, createCodeToken } from "../services/verificationCode.service";
 
 // ------------------- Registration -------------------
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface IRegistrationBody {
   name: string;
@@ -53,32 +56,23 @@ interface IActivationToken {
   activationCode: string;
 }
 
-const ACTIVATION_CODE_DIGITS = 6;
+// What travels inside the activation token. The password is already a bcrypt
+// hash (never the plain text), and the emailed code is only present as a keyed
+// hash - see verificationCode.service.ts.
+interface IActivationPayload {
+  user: { name: string; email: string; passwordHash: string };
+}
 
-// The emailed code must NOT be readable from the token. A JWT payload is only
-// signed, not encrypted: anyone holding the token (and the registration
-// response hands it to whoever registered) can base64-decode it. So the token
-// stores a keyed HASH of the code, and the real code only ever goes by email.
-const hashActivationCode = (code: string, nonce: string): string =>
-  crypto
-    .createHmac("sha256", process.env.ACTIVATION_SECRET as string)
-    .update(`${nonce}:${code}`)
-    .digest("hex");
-
-export const createActivationToken = (user: IRegistrationBody): IActivationToken => {
-  const activationCode = crypto
-    .randomInt(0, 10 ** ACTIVATION_CODE_DIGITS)
-    .toString()
-    .padStart(ACTIVATION_CODE_DIGITS, "0");
-  const nonce = crypto.randomBytes(16).toString("hex");
-
-  const token = jwt.sign(
-    { user, nonce, codeHash: hashActivationCode(activationCode, nonce) },
-    process.env.ACTIVATION_SECRET as Secret,
-    { expiresIn: "5m" }
+export const createActivationToken = async (
+  user: IRegistrationBody
+): Promise<IActivationToken> => {
+  const passwordHash = await bcrypt.hash(user.password, 10);
+  const { token, code } = createCodeToken<IActivationPayload>(
+    { user: { name: user.name, email: user.email, passwordHash } },
+    process.env.ACTIVATION_SECRET as string,
+    "5m"
   );
-
-  return { token, activationCode };
+  return { token, activationCode: code };
 };
 
 // Shared "slow down" error for rate-limited endpoints.
@@ -138,7 +132,7 @@ export const registrationUser = CatchAsyncError(
 
       const user: IRegistrationBody = { name, email, password };
 
-      const activationToken = createActivationToken(user);
+      const activationToken = await createActivationToken(user);
       const activationCode = activationToken.activationCode;
 
       const data = { user: { name: user.name }, activationCode };
@@ -189,30 +183,27 @@ export const activateUser = CatchAsyncError(
         return next(tooManyRequests("wrong codes", locked.retryAfterSeconds));
       }
 
-      const payload = jwt.verify(
+      const check = checkCodeToken<IActivationPayload>(
         activation_token,
+        activation_code,
         process.env.ACTIVATION_SECRET as string
-      ) as {
-        user: IRegistrationBody;
-        nonce?: string;
-        codeHash?: string;
-      };
-
-      if (!payload.nonce || !payload.codeHash) {
-        return next(new ErrorHandler("Activation link is out of date - please sign up again", 400));
+      );
+      if (!check.ok) {
+        if (check.reason === "wrong_code") {
+          await hitRateLimit(attemptKey, ATTEMPT_LIMIT, 10 * 60);
+          return next(new ErrorHandler("Invalid activation code", 400));
+        }
+        return next(
+          new ErrorHandler(
+            check.reason === "expired"
+              ? "This code has expired - please sign up again"
+              : "Activation link is invalid or out of date - please sign up again",
+            400
+          )
+        );
       }
 
-      const expected = Buffer.from(payload.codeHash, "hex");
-      const given = Buffer.from(hashActivationCode(activation_code.trim(), payload.nonce), "hex");
-      const codeIsValid =
-        expected.length === given.length && crypto.timingSafeEqual(expected, given);
-
-      if (!codeIsValid) {
-        await hitRateLimit(attemptKey, ATTEMPT_LIMIT, 10 * 60);
-        return next(new ErrorHandler("Invalid activation code", 400));
-      }
-
-      const { name, email, password } = payload.user;
+      const { name, email, passwordHash } = check.payload.user;
 
       const existUser = await userModel.findOne({ email });
       if (existUser) {
@@ -223,13 +214,17 @@ export const activateUser = CatchAsyncError(
       // the platform setting.
       const needsApproval = (await getSettings()).requireStudentApproval;
 
-      const user = await userModel.create({
+      // The password is already hashed (it came out of our own signed token),
+      // so tell the model not to hash it again.
+      const user = new userModel({
         name,
         email,
-        password,
+        password: passwordHash,
         isVerified: true,
         approvalStatus: needsApproval ? "pending" : "approved",
       });
+      user.$locals.passwordAlreadyHashed = true;
+      await user.save();
 
       if (needsApproval) {
         const admins = await userModel
@@ -460,19 +455,13 @@ export const updateUserInfo = CatchAsyncError(
         return next(new ErrorHandler("User not found", 404));
       }
 
+      // Changing the email goes through the verify-the-new-address flow
+      // (requestEmailChange / confirmEmailChange), never through this route.
       const { email } = (req.body ?? {}) as IUpdateUserInfo;
-      if (email !== undefined) {
-        const cleanEmail = typeof email === "string" ? email.trim() : "";
-        if (!EMAIL_PATTERN.test(cleanEmail)) {
-          return next(new ErrorHandler("Please enter a valid email", 400));
-        }
-        if (cleanEmail !== user.email) {
-          const isEmailExist = await userModel.findOne({ email: cleanEmail });
-          if (isEmailExist) {
-            return next(new ErrorHandler("Email already exists", 400));
-          }
-          user.email = cleanEmail;
-        }
+      if (typeof email === "string" && email.trim() !== user.email) {
+        return next(
+          new ErrorHandler("Use \"Change email\" to change your email - it needs to be verified", 400)
+        );
       }
 
       const { name, bio, expertise } = parsed.update;
@@ -496,6 +485,155 @@ interface IUpdatePassword {
   oldPassword: string;
   newPassword: string;
 }
+
+// ------------------- Change email (verified) -------------------
+// Step 1: ask for the change. Needs the current password, and the code goes to
+// the NEW address - so it only completes if the person really owns it.
+// Step 2: send that code back. Only then does the account's email change.
+
+interface IEmailChangePayload {
+  userId: string;
+  newEmail: string;
+}
+
+export const requestEmailChange = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = parseEmailChangeRequest(req.body);
+      if ("error" in parsed) {
+        return next(new ErrorHandler(parsed.error, 400));
+      }
+
+      const userId = String(req.user?._id);
+      const limit = await hitRateLimit(`email-change:${userId}`, 5, 60 * 60);
+      if (!limit.allowed) {
+        return next(tooManyRequests("email change requests", limit.retryAfterSeconds));
+      }
+
+      const user = await userModel.findById(userId).select("+password");
+      if (!user || !user.password) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+      if (!(await user.comparePassword(parsed.password))) {
+        return next(new ErrorHandler("That password is not correct", 400));
+      }
+      if (parsed.newEmail === user.email) {
+        return next(new ErrorHandler("That is already your email", 400));
+      }
+      if (await userModel.findOne({ email: parsed.newEmail })) {
+        return next(new ErrorHandler("Email already exists", 400));
+      }
+
+      const { token, code } = createCodeToken<IEmailChangePayload>(
+        { userId, newEmail: parsed.newEmail },
+        process.env.ACTIVATION_SECRET as string,
+        "15m"
+      );
+
+      const { platformName } = await getSettings();
+      await sendMail({
+        email: parsed.newEmail,
+        subject: "Confirm your new email",
+        template: "email-change-mail.ejs",
+        data: { user: { name: user.name }, code, platformName },
+      });
+
+      res.status(200).json({
+        success: true,
+        emailChangeToken: token,
+        message: `We sent a code to ${parsed.newEmail}`,
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+export const confirmEmailChange = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { token, code } = req.body ?? {};
+      if (typeof token !== "string" || typeof code !== "string") {
+        return next(new ErrorHandler("Token and code are required", 400));
+      }
+
+      const ATTEMPT_LIMIT = 5;
+      const attemptKey = `email-confirm:${hashKeyPart(token)}`;
+      const locked = await isRateLimited(attemptKey, ATTEMPT_LIMIT);
+      if (!locked.allowed) {
+        return next(tooManyRequests("wrong codes", locked.retryAfterSeconds));
+      }
+
+      const check = checkCodeToken<IEmailChangePayload>(
+        token,
+        code,
+        process.env.ACTIVATION_SECRET as string
+      );
+      if (!check.ok) {
+        if (check.reason === "wrong_code") {
+          await hitRateLimit(attemptKey, ATTEMPT_LIMIT, 10 * 60);
+          return next(new ErrorHandler("Invalid code", 400));
+        }
+        return next(
+          new ErrorHandler(
+            check.reason === "expired"
+              ? "This code has expired - request a new one"
+              : "This link is invalid - request a new code",
+            400
+          )
+        );
+      }
+
+      // The token must belong to the person who is logged in right now.
+      const userId = String(req.user?._id);
+      if (check.payload.userId !== userId) {
+        return next(new ErrorHandler("This code was not issued for your account", 403));
+      }
+
+      const user = await userModel.findById(userId);
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      const oldEmail = user.email;
+      const { newEmail } = check.payload;
+      if (await userModel.findOne({ email: newEmail, _id: { $ne: user._id } })) {
+        return next(new ErrorHandler("Email already exists", 400));
+      }
+
+      user.email = newEmail;
+      user.isVerified = true;
+      try {
+        await user.save();
+      } catch (error: any) {
+        if (error?.code === 11000) {
+          return next(new ErrorHandler("Email already exists", 400));
+        }
+        throw error;
+      }
+      await redis.set(userId, JSON.stringify(user), "EX", 7 * 24 * 60 * 60);
+
+      logActivity(req, "user.email_change", `Changed email to ${newEmail}`, { userId });
+
+      // Tell the OLD address, so a hijacked account can't change it silently.
+      try {
+        const { platformName } = await getSettings();
+        await sendMail({
+          email: oldEmail,
+          subject: "Your email was changed",
+          template: "email-changed-notice.ejs",
+          data: { user: { name: user.name }, newEmail, platformName },
+        });
+      } catch (mailError: any) {
+        console.error("Could not send email-changed notice:", mailError.message);
+      }
+
+      res.status(200).json({ success: true, user });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
 
 export const updatePassword = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
