@@ -71,8 +71,9 @@ The README below reflects the current implementation state of the project as it 
 Certificates, discussions, forgot/reset password, review moderation, analytics and profiles all exist now. What is still open compared with the original specification:
 
 **Content**
-- Uploading PDF / DOC / PPT lesson materials (lessons only take links today) and protected video delivery (signed / expiring URLs).
-- Real PDF download for certificates (they print-to-PDF from the browser; the verification page works).
+- Videos are still links (YouTube / Vimeo etc.); uploading videos and protected video delivery (signed / expiring URLs) is not built. Document materials (PDF / Word / PowerPoint / Excel, 10 MB) are done: stored privately and downloaded only through an enrollment check.
+- Materials attach to a course (the model also supports a lesson, but the pages don't pick one yet).
+- Certificate PDFs only work for names in Latin letters (Urdu / Hindi / Chinese names fall back to the browser's Print / Save as PDF).
 - Departments (only categories exist) and a search filter for course duration.
 - Configurable completion requirements per course (the rule is fixed: all lessons + every quiz passed).
 
@@ -83,8 +84,6 @@ Certificates, discussions, forgot/reset password, review moderation, analytics a
 - The old lesson Q&A and the newer Discussions system overlap; one of them should be retired.
 
 **Security follow-ups**
-- Changing your email in your profile does not re-verify the new address.
-- The activation token still carries the (own) password in readable form until the account is activated.
 - Editing a published course does not send it back for approval (a product decision).
 - Refresh tokens are not rotated or individually revoked.
 - Only pure logic has automated tests (`npm test` in `server/`); there are no API-level integration tests yet.
