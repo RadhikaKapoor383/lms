@@ -105,6 +105,12 @@ export default function CourseAccessPage() {
           >
             View quizzes →
           </Link>
+          <Link
+            href={`/course-access/${courseId}/materials`}
+            className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+          >
+            Materials →
+          </Link>
         </div>
         {isStudent && certStatus && (
           <div className="mb-6 border border-parchment-dark p-4 text-sm dark:border-ink-light">
