@@ -108,6 +108,11 @@ userSchema.set("toJSON", {
 
 // Hash password before saving (only if it was modified)
 userSchema.pre<IUser>("save", async function (next) {
+  // Sign-up hashes the password before it travels in the activation token, so
+  // it must not be hashed a second time when the account is finally created.
+  if (this.$locals?.passwordAlreadyHashed) {
+    return next();
+  }
   if (!this.isModified("password") || !this.password) {
     return next();
   }

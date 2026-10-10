@@ -28,6 +28,7 @@ import NotificationModel from "../models/notification.model";
 import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
 import { toPublicCourse } from "../utils/publicProfile";
 import { pickCourseFields } from "../services/courseFields.service";
+import { removeCourseMaterials } from "./material.controller";
 import { getSettings } from "../services/settings.service";
 import { redis } from "../utils/redis";
 import sendMail from "../utils/sendMail";
@@ -520,6 +521,7 @@ export const deleteCourse = CatchAsyncError(
       await QuizModel.deleteMany({ course: id });
       await QuizAttemptModel.deleteMany({ course: id });
       await ModuleModel.deleteMany({ course: id });
+      await removeCourseMaterials(id);
       await userModel.updateMany(
         { "courses.courseId": id },
         { $pull: { courses: { courseId: id } } } as any
