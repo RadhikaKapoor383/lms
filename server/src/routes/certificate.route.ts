@@ -1,6 +1,7 @@
 import express from "express";
 import { authorizeRoles, isAuthenticated } from "../middleware/auth";
 import {
+  downloadCertificatePdf,
   getAdminCertificates,
   getCertificateStatus,
   getInstructorCertificates,
@@ -14,6 +15,7 @@ const certificateRouter = express.Router();
 
 // public - anyone holding a certificate id can check it
 certificateRouter.get("/certificates/verify/:certificateId", verifyCertificate);
+certificateRouter.get("/certificates/:certificateId/pdf", downloadCertificatePdf);
 
 // student
 certificateRouter.get(
