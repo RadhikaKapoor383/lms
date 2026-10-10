@@ -26,6 +26,7 @@ import settingsRouter from "./routes/settings.route";
 import reportRouter from "./routes/report.route";
 import adminManagementRouter from "./routes/adminManagement.route";
 import dashboardRouter from "./routes/dashboard.route";
+import materialRouter from "./routes/material.route";
 
 // Behind a reverse proxy (Render, Railway, nginx...) every request looks like it
 // comes from the proxy's IP unless Express is told how many proxies to trust.
@@ -91,7 +92,8 @@ app.use(
   settingsRouter,
   reportRouter,
   adminManagementRouter,
-  dashboardRouter
+  dashboardRouter,
+  materialRouter
 );
 
 // testing route
