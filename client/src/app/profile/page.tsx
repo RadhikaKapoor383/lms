@@ -4,7 +4,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useEffect, useState } from "react";
 import { useAppSelector } from "@/hooks/redux";
-import { useUpdateProfileMutation } from "@/redux/features/users/usersApi";
+import {
+  useConfirmEmailChangeMutation,
+  useRequestEmailChangeMutation,
+  useUpdatePasswordMutation,
+  useUpdateProfileMutation,
+} from "@/redux/features/users/usersApi";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ProfilePage() {
   const { user } = useAppSelector((state) => state.auth);
@@ -43,8 +49,85 @@ export default function ProfilePage() {
     }
   };
 
+  // ---- change password ----
+  const [updatePassword, { isLoading: isUpdatingPassword }] = useUpdatePasswordMutation();
+  const [pwOpen, setPwOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pwError, setPwError] = useState("");
+
+  const closePasswordForm = () => {
+    setPwOpen(false);
+    setOldPassword("");
+    setNewPassword("");
+    setPwError("");
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError("");
+    if (newPassword.length < 8) {
+      setPwError("New password must be at least 8 characters");
+      return;
+    }
+    try {
+      await updatePassword({ oldPassword, newPassword }).unwrap();
+      closePasswordForm();
+      setMessage("Your password was changed.");
+    } catch (err: any) {
+      setPwError(err?.data?.message || "Could not change your password");
+    }
+  };
+
+  // ---- change email: ask, then confirm with the code mailed to the new address ----
+  const [requestEmailChange, { isLoading: isRequesting }] = useRequestEmailChangeMutation();
+  const [confirmEmailChange, { isLoading: isConfirming }] = useConfirmEmailChangeMutation();
+  const [emailStep, setEmailStep] = useState<"closed" | "request" | "code">("closed");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailToken, setEmailToken] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  const closeEmailForm = () => {
+    setEmailStep("closed");
+    setNewEmail("");
+    setEmailPassword("");
+    setEmailToken("");
+    setEmailCode("");
+    setEmailError("");
+  };
+
+  const handleRequestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError("");
+    try {
+      const res: any = await requestEmailChange({ newEmail, password: emailPassword }).unwrap();
+      setEmailToken(res.emailChangeToken);
+      setEmailPassword("");
+      setEmailStep("code");
+    } catch (err: any) {
+      setEmailError(err?.data?.message || "Could not start the email change");
+    }
+  };
+
+  const handleConfirmEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError("");
+    try {
+      await confirmEmailChange({ token: emailToken, code: emailCode }).unwrap();
+      closeEmailForm();
+      setMessage("Your email was changed.");
+    } catch (err: any) {
+      setEmailError(err?.data?.message || "Could not confirm the code");
+    }
+  };
+
   const inputClass =
     "mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light";
+  // same look, without the top margin (PasswordInput's wrapper already has it)
+  const fieldClass =
+    "w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light";
 
   return (
     <>
@@ -152,6 +235,145 @@ export default function ProfilePage() {
                 </div>
               </form>
             )}
+
+            <div className="mt-6">
+              {emailStep === "closed" && (
+                <button
+                  onClick={() => {
+                    setMessage("");
+                    setEmailStep("request");
+                  }}
+                  className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+                >
+                  Change email
+                </button>
+              )}
+
+              {emailStep === "request" && (
+                <form onSubmit={handleRequestEmail} className="space-y-4 border border-parchment-dark p-5 dark:border-ink-light">
+                  <p className="text-sm text-ink/70 dark:text-parchment/70">
+                    We&apos;ll send a code to your new address. Your email only changes after you enter it.
+                  </p>
+                  <div>
+                    <label htmlFor="new-email" className="text-sm text-ink/70 dark:text-parchment/70">New email</label>
+                    <input
+                      id="new-email"
+                      type="email"
+                      required
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-ink/70 dark:text-parchment/70">Current password</label>
+                    <PasswordInput
+                      value={emailPassword}
+                      required
+                      autoComplete="current-password"
+                      className={fieldClass}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailPassword(e.target.value)}
+                      placeholder="Your current password"
+                    />
+                  </div>
+                  {emailError && <p className="text-sm text-clay">{emailError}</p>}
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={isRequesting}
+                      className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                    >
+                      {isRequesting ? "Sending..." : "Send code"}
+                    </button>
+                    <button type="button" onClick={closeEmailForm} className="text-sm text-ink/60 dark:text-parchment/60">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {emailStep === "code" && (
+                <form onSubmit={handleConfirmEmail} className="space-y-4 border border-parchment-dark p-5 dark:border-ink-light">
+                  <p className="text-sm text-ink/70 dark:text-parchment/70">
+                    Enter the 6-digit code we sent to {newEmail}. It works for 15 minutes.
+                  </p>
+                  <input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    required
+                    value={emailCode}
+                    onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ""))}
+                    aria-label="Confirmation code"
+                    className={inputClass}
+                  />
+                  {emailError && <p className="text-sm text-clay">{emailError}</p>}
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={isConfirming || emailCode.length !== 6}
+                      className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                    >
+                      {isConfirming ? "Checking..." : "Confirm email"}
+                    </button>
+                    <button type="button" onClick={closeEmailForm} className="text-sm text-ink/60 dark:text-parchment/60">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            <div className="mt-4">
+              {!pwOpen ? (
+                <button
+                  onClick={() => {
+                    setMessage("");
+                    setPwOpen(true);
+                  }}
+                  className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+                >
+                  Change password
+                </button>
+              ) : (
+                <form onSubmit={handleChangePassword} className="space-y-4 border border-parchment-dark p-5 dark:border-ink-light">
+                  <div>
+                    <label className="text-sm text-ink/70 dark:text-parchment/70">Current password</label>
+                    <PasswordInput
+                      required
+                      autoComplete="current-password"
+                      className={fieldClass}
+                      value={oldPassword}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPassword(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-ink/70 dark:text-parchment/70">New password (at least 8 characters)</label>
+                    <PasswordInput
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      className={fieldClass}
+                      value={newPassword}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                  {pwError && <p className="text-sm text-clay">{pwError}</p>}
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={isUpdatingPassword}
+                      className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                    >
+                      {isUpdatingPassword ? "Saving..." : "Change password"}
+                    </button>
+                    <button type="button" onClick={closePasswordForm} className="text-sm text-ink/60 dark:text-parchment/60">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
 
             <div className="mt-10">
               <h2 className="font-display text-2xl text-ink dark:text-parchment">
