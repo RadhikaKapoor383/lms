@@ -1,3 +1,5 @@
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const MAX_BIO_LENGTH = 500;
 export const MAX_EXPERTISE_ITEMS = 10;
 export const MAX_EXPERTISE_LENGTH = 40;
@@ -52,4 +54,19 @@ export const parseProfileUpdate = (
   }
 
   return { update };
+};
+
+// Step 1 of changing your email: the new address plus your CURRENT password
+// (so someone who walks up to an open laptop can't take over the account).
+export const parseEmailChangeRequest = (
+  body: any
+): { newEmail: string; password: string } | { error: string } => {
+  const newEmail = typeof body?.newEmail === "string" ? body.newEmail.trim() : "";
+  if (!EMAIL_PATTERN.test(newEmail) || newEmail.length > 254) {
+    return { error: "Please enter a valid email" };
+  }
+  if (typeof body?.password !== "string" || !body.password) {
+    return { error: "Enter your current password to change your email" };
+  }
+  return { newEmail, password: body.password };
 };
