@@ -30,6 +30,37 @@ export default function CertificatePage() {
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
+  // Real PDF from the server. It's fetched (not just linked) so a problem -
+  // for example a name the PDF fonts can't draw - shows as a message instead
+  // of a page of raw JSON.
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+
+  const handleDownloadPdf = async () => {
+    setDownloadError("");
+    setIsDownloading(true);
+    try {
+      const base = (process.env.NEXT_PUBLIC_SERVER_URI || "").replace(/\/+$/, "");
+      const res = await fetch(`${base}/certificates/${encodeURIComponent(certificateId)}/pdf`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || "Could not download the PDF");
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `certificate-${certificateId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setDownloadError(err?.message || "Could not download the PDF");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <>
       <div className="print:hidden">
@@ -61,13 +92,25 @@ export default function CertificatePage() {
               >
                 {revoked ? "Revoked" : "✓ Verified — valid certificate"}
               </span>
-              <button
-                onClick={() => window.print()}
-                className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark"
-              >
-                Download / Print PDF
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => window.print()}
+                  className="text-sm text-ink/70 hover:underline dark:text-parchment/70"
+                >
+                  Print
+                </button>
+                <button
+                  onClick={handleDownloadPdf}
+                  disabled={isDownloading}
+                  className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                >
+                  {isDownloading ? "Preparing..." : "Download PDF"}
+                </button>
+              </div>
             </div>
+            {downloadError && (
+              <p className="-mt-3 mb-4 text-sm text-clay print:hidden">{downloadError}</p>
+            )}
 
             {/* The certificate sheet stays light in dark mode so it prints correctly */}
             <div className="relative border-4 border-double border-neutral-800 bg-white p-10 text-center text-neutral-900 sm:p-16 print:border-neutral-800">
