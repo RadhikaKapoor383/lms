@@ -53,6 +53,45 @@ export const usersApi = apiSlice.injectEndpoints({
       },
     }),
 
+    // The logged-in person changing their own password.
+    updatePassword: builder.mutation({
+      query: (body: { oldPassword: string; newPassword: string }) => ({
+        url: "update-user-password",
+        method: "PUT",
+        body,
+        credentials: "include",
+      }),
+    }),
+
+    // Changing your email takes two steps: ask (a code is mailed to the NEW
+    // address), then confirm with that code.
+    requestEmailChange: builder.mutation({
+      query: (body: { newEmail: string; password: string }) => ({
+        url: "email-change/request",
+        method: "POST",
+        body,
+        credentials: "include",
+      }),
+    }),
+
+    confirmEmailChange: builder.mutation({
+      query: (body: { token: string; code: string }) => ({
+        url: "email-change/confirm",
+        method: "POST",
+        body,
+        credentials: "include",
+      }),
+      async onQueryStarted(_arg, { queryFulfilled, dispatch, getState }) {
+        try {
+          const { data } = await queryFulfilled;
+          const token = (getState() as any).auth.token;
+          dispatch(userLoggedIn({ accessToken: token, user: data.user }));
+        } catch {
+          /* the page shows the error */
+        }
+      },
+    }),
+
     // only for students waiting for approval (when the platform requires it)
     setUserApproval: builder.mutation({
       query: ({ id, approve }: { id: string; approve: boolean }) => ({
@@ -81,5 +120,8 @@ export const {
   useSetUserActiveMutation,
   useSetUserApprovalMutation,
   useUpdateProfileMutation,
+  useRequestEmailChangeMutation,
+  useUpdatePasswordMutation,
+  useConfirmEmailChangeMutation,
   useDeleteUserAdminMutation,
 } = usersApi;
