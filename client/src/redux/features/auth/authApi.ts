@@ -79,6 +79,15 @@ export const authApi = apiSlice.injectEndpoints({
       },
     }),
 
+    // How long this login can last. Asking also counts as "still here".
+    getSession: builder.query({
+      query: () => ({
+        url: "session",
+        method: "GET",
+        credentials: "include",
+      }),
+    }),
+
     logOut: builder.query({
       query: () => ({
         url: "logout",
@@ -125,6 +134,7 @@ export const {
   useLoginMutation,
   useForgotPasswordMutation,
   useResetPasswordMutation,
+  useLazyGetSessionQuery,
   useLazyLogOutQuery,
   useLoadUserQuery,
 } = authApi;
