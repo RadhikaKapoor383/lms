@@ -22,6 +22,9 @@ export const TOKEN_SLACK_SECONDS = 120;
 // more than the slack above - used at login and whenever the access token is
 // renewed (a renewal keeps the ORIGINAL login time, so it can't stretch the cap).
 export const buildAuthTokens = (userId: string, sid: string, loginAt: number) => {
+  // With no hard cap (the default) there is nothing to limit: tokens last their
+  // normal time and are renewed as long as the person stays active. Whether the
+  // login is still alive is the session's idle clock, checked on every request.
   const left =
     Math.max(1, secondsUntilMax(loginAt, getSessionLimits().maxSeconds)) + TOKEN_SLACK_SECONDS;
   const accessSeconds = Math.min(accessTokenExpire * 60, left);
@@ -45,7 +48,8 @@ export const buildAuthTokens = (userId: string, sid: string, loginAt: number) =>
 export const describeSession = (loginAt: number) => {
   const { maxSeconds, idleSeconds } = getSessionLimits();
   return {
-    endsAt: new Date((loginAt + maxSeconds) * 1000).toISOString(),
+    // null = no hard cap; the login only ends after sitting idle
+    endsAt: maxSeconds > 0 ? new Date((loginAt + maxSeconds) * 1000).toISOString() : null,
     maxSeconds,
     idleSeconds,
     serverNow: new Date().toISOString(),
