@@ -13,6 +13,8 @@ import {
   normalizeQuestion,
   validateQuestion,
 } from "../services/quizGrading.service";
+import { isPastQuizDeadline } from "../services/quizTiming.service";
+import { recordTimedOutAttempt, settleExpiredStart } from "../services/quizAttempt.service";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
 import { tryIssueCertificate } from "../services/certificate.service";
@@ -272,6 +274,9 @@ export const getQuiz = CatchAsyncError(
         return next(new ErrorHandler("You are not eligible to access this course", 404));
       }
 
+      // An attempt whose time ran out while the student was away counts as used.
+      await settleExpiredStart(quiz, req.user?._id);
+
       const attemptsUsed = await QuizAttemptModel.countDocuments({
         quiz: quiz._id,
         student: req.user?._id,
@@ -311,6 +316,10 @@ export const startQuizAttempt = CatchAsyncError(
       if (!allowed) {
         return next(new ErrorHandler("You are not eligible to access this course", 404));
       }
+
+      // If the last attempt ran out of time while the student was away, it is
+      // used up now - before we decide whether another attempt is allowed.
+      await settleExpiredStart(quiz, req.user?._id);
 
       const attemptsUsed = await QuizAttemptModel.countDocuments({
         quiz: quiz._id,
@@ -381,14 +390,6 @@ export const submitQuizAttempt = CatchAsyncError(
         return next(new ErrorHandler("You are not eligible to access this course", 404));
       }
 
-      const attemptsUsed = await QuizAttemptModel.countDocuments({
-        quiz: quizId,
-        student: req.user?._id,
-      });
-      if (attemptsUsed >= quiz.maxAttempts) {
-        return next(new ErrorHandler("You've used all your attempts for this quiz", 403));
-      }
-
       // The start time comes from OUR record, not the request body.
       // findOneAndDelete is atomic: if two submits race, only one gets the
       // record, so a double-submit can't sneak past maxAttempts.
@@ -396,17 +397,47 @@ export const submitQuizAttempt = CatchAsyncError(
         quiz: quizId,
         student: req.user?._id,
       });
+
+      const timedOutResponse = (attempt: any, attemptsUsedNow: number) =>
+        res.status(201).json({
+          success: true,
+          timedOut: true,
+          message: "Time ran out before this was submitted, so the attempt counted with a score of 0.",
+          attempt: quiz.showResultsImmediately
+            ? attempt
+            : { _id: attempt._id, submittedAt: attempt.submittedAt, timedOut: true },
+          attemptsRemaining: Math.max(0, quiz.maxAttempts - attemptsUsedNow),
+        });
+
       if (!start) {
+        // Maybe the time ran out and the attempt was already settled (for
+        // example the page was reloaded). Then say so instead of "start first".
+        const recent = await QuizAttemptModel.findOne({
+          quiz: quizId,
+          student: req.user?._id,
+          timedOut: true,
+          submittedAt: { $gt: new Date(Date.now() - 60 * 1000) },
+        }).sort({ _id: -1 });
+        if (recent) {
+          const used = await QuizAttemptModel.countDocuments({ quiz: quizId, student: req.user?._id });
+          return timedOutResponse(recent, used);
+        }
         return next(new ErrorHandler("Start the quiz before submitting", 400));
       }
 
-      if (quiz.timeLimitMinutes) {
-        const GRACE_MS = 10 * 1000; // network delay allowance
-        const deadline =
-          start.startedAt.getTime() + quiz.timeLimitMinutes * 60 * 1000 + GRACE_MS;
-        if (Date.now() > deadline) {
-          return next(new ErrorHandler("Time is up - this attempt can't be submitted", 403));
-        }
+      // Time is up: the attempt is used, with a score of 0. Whatever was sent
+      // is not graded.
+      if (isPastQuizDeadline(start.startedAt, quiz.timeLimitMinutes)) {
+        const attempt = await recordTimedOutAttempt(quiz, req.user?._id, start.startedAt);
+        return timedOutResponse(attempt, attempt.attemptNumber);
+      }
+
+      const attemptsUsed = await QuizAttemptModel.countDocuments({
+        quiz: quizId,
+        student: req.user?._id,
+      });
+      if (attemptsUsed >= quiz.maxAttempts) {
+        return next(new ErrorHandler("You've used all your attempts for this quiz", 403));
       }
 
       // Keep only the fields we know, with the right types, whatever the
