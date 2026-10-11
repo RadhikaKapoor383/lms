@@ -2,13 +2,16 @@ import crypto from "crypto";
 import { redis } from "./redis";
 import ErrorHandler from "./ErrorHandler";
 
-// Two limits on every login ("session"):
+// Limits on every login ("session"):
 //
-//   MAX  - a hard cap measured from the moment of login (default 2 hours).
-//          Even a busy user is logged out then.
 //   IDLE - logged out after this long with no activity (default 30 minutes).
 //          Every request, and the small "still here" ping the website sends
-//          while someone is really using it, restarts this clock.
+//          while someone is really using it, restarts this clock. Someone who
+//          keeps studying is never logged out by this.
+//   MAX  - OPTIONAL hard cap measured from the moment of login. Off by default
+//          (0): a student who is active is not kicked out. Set SESSION_MAX_HOURS
+//          (for example on a shared lab computer) to also log everyone out
+//          after that long, active or not.
 //
 // Each login gets its own random session id. It is signed into the user's
 // tokens, and the server keeps `sess:<id>` in Redis with an expiry equal to
@@ -16,7 +19,7 @@ import ErrorHandler from "./ErrorHandler";
 // tokens say. Several devices therefore have independent sessions.
 
 export interface ISessionLimits {
-  maxSeconds: number;
+  maxSeconds: number; // 0 = no hard cap
   idleSeconds: number;
 }
 
@@ -27,18 +30,21 @@ const positive = (value: string | undefined, fallback: number): number => {
 
 // Read from the environment each time (not once at import) so it can be tested.
 export const getSessionLimits = (env: NodeJS.ProcessEnv = process.env): ISessionLimits => ({
-  maxSeconds: Math.max(1, Math.round(positive(env.SESSION_MAX_HOURS, 2) * 3600)),
+  maxSeconds: positive(env.SESSION_MAX_HOURS, 0) > 0
+    ? Math.max(1, Math.round(positive(env.SESSION_MAX_HOURS, 0) * 3600))
+    : 0,
   idleSeconds: Math.max(1, Math.round(positive(env.SESSION_IDLE_MINUTES, 30) * 60)),
 });
 
 export const nowSeconds = (): number => Math.floor(Date.now() / 1000);
 
-// Seconds left before the hard cap (0 or less = over).
+// Seconds left before the hard cap (0 or less = over). With no cap there is
+// no end, so this is Infinity.
 export const secondsUntilMax = (loginAt: number, maxSeconds: number, now = nowSeconds()): number =>
-  loginAt + maxSeconds - now;
+  maxSeconds <= 0 ? Infinity : loginAt + maxSeconds - now;
 
 export const isPastMax = (loginAt: number, maxSeconds: number, now = nowSeconds()): boolean =>
-  secondsUntilMax(loginAt, maxSeconds, now) <= 0;
+  maxSeconds > 0 && secondsUntilMax(loginAt, maxSeconds, now) <= 0;
 
 // "2 hours", "30 minutes", "90 seconds" - for messages shown to people.
 export const describeDuration = (seconds: number): string => {
