@@ -7,14 +7,23 @@ import mongoose from "mongoose";
 import CourseModel from "../models/course.model";
 import AssignmentModel from "../models/assignment.model";
 import QuizModel from "../models/quiz.model";
+import {
+  endSession,
+  getSessionLimits,
+  isPastMax,
+  sessionEndedError,
+  touchSession,
+} from "../utils/session";
 
 export const isAuthenticated = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     const access_token = req.cookies.access_token;
 
+    // 401 = "not logged in (any more)". The website reacts to it: an expired
+    // access token is renewed quietly, a finished session sends you to login.
     if (!access_token) {
       return next(
-        new ErrorHandler("Please login to access this resource", 400)
+        new ErrorHandler("Please login to access this resource", 401, "AUTH_REQUIRED")
       );
     }
 
@@ -25,14 +34,32 @@ export const isAuthenticated = CatchAsyncError(
         process.env.ACCESS_TOKEN as string
       ) as JwtPayload;
     } catch (err) {
-      return next(new ErrorHandler("Access token is not valid", 400));
+      return next(new ErrorHandler("Access token is not valid", 401, "TOKEN_EXPIRED"));
+    }
+
+    // Tokens from before sessions existed carry no session id: log in again.
+    if (typeof decoded.sid !== "string" || typeof decoded.loginAt !== "number") {
+      return next(new ErrorHandler("Please log in again", 401, "AUTH_REQUIRED"));
+    }
+
+    const { maxSeconds } = getSessionLimits();
+    if (isPastMax(decoded.loginAt, maxSeconds)) {
+      await endSession(decoded.sid);
+      return next(sessionEndedError("max"));
+    }
+    // Still within the cap: is the login alive (not idle too long, not logged
+    // out)? This also restarts the idle clock.
+    if (!(await touchSession(decoded.sid, String(decoded.id)))) {
+      return next(sessionEndedError("idle"));
     }
 
     const user = await redis.get(decoded.id);
 
     if (!user) {
-      return next(new ErrorHandler("User not found", 400));
+      return next(new ErrorHandler("User not found", 401, "AUTH_REQUIRED"));
     }
+
+    req.sessionInfo = { sid: decoded.sid, loginAt: decoded.loginAt };
 
     req.user = JSON.parse(user);
     // sessions cached before the toJSON fix may still hold the hash
