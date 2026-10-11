@@ -10,8 +10,10 @@ import { sessionEnded } from "@/redux/features/auth/authSlice";
 // is the friendly side of it):
 //   * IDLE: after a stretch with no mouse / keyboard / touch activity you get a
 //     "still there?" warning, then you are logged out.
-//   * MAX:  a hard cap from the moment you logged in (set by the server, default
-//     2 hours). You get a heads-up 5 minutes before.
+//   * MAX:  OPTIONAL hard cap from the moment you logged in. The server only
+//     sends one if the school turned it on (off by default - someone who keeps
+//     studying is never logged out). If there is one, you get a heads-up 5
+//     minutes before.
 // While you are really using the site, a small ping tells the server you are
 // still here. Several tabs share one activity clock, so a quiet background tab
 // can't log you out while you are working in another one.
@@ -27,6 +29,7 @@ const MAX_WARNING_SECONDS = 5 * 60;
 const IDLE_MARGIN_MS = 90 * 1000;
 const EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"] as const;
 
+// endsAtMs is Infinity when there is no hard cap.
 type Limits = { idleMs: number; endsAtMs: number; maxSeconds: number; idleSeconds: number };
 type Warning = { kind: "idle" | "max"; secondsLeft: number } | null;
 
@@ -96,7 +99,7 @@ export default function SessionGuard() {
     const skew = new Date(s.serverNow).getTime() - Date.now(); // server clock minus ours
     limitsRef.current = {
       idleMs: Math.max(s.idleSeconds * 500, s.idleSeconds * 1000 - IDLE_MARGIN_MS),
-      endsAtMs: new Date(s.endsAt).getTime() - skew,
+      endsAtMs: s.endsAt ? new Date(s.endsAt).getTime() - skew : Infinity,
       maxSeconds: s.maxSeconds,
       idleSeconds: s.idleSeconds,
     };
@@ -109,7 +112,7 @@ export default function SessionGuard() {
       const l = limitsRef.current;
       const message =
         kind === "max"
-          ? `Your session ended after ${describe(l?.maxSeconds ?? 7200)}. Please log in again.`
+          ? `Your session ended after ${describe(l?.maxSeconds || 7200)}. Please log in again.`
           : `You were logged out after ${describe(l?.idleSeconds ?? 1800)} of inactivity. Please log in again.`;
       try {
         window.localStorage.setItem(ENDED_KEY, JSON.stringify({ message, at: Date.now() }));
