@@ -9,6 +9,7 @@ import {
   loginUser,
   logoutUser,
   registrationUser,
+  getSessionInfo,
   requestEmailChange,
   confirmEmailChange,
   updateAccessToken,
@@ -26,7 +27,8 @@ userRouter.post("/activate-user", activateUser);
 userRouter.post("/login", loginUser);
 userRouter.post("/forgot-password", forgotPassword);
 userRouter.post("/reset-password", resetPassword);
-userRouter.get("/logout", isAuthenticated, logoutUser);
+userRouter.get("/logout", logoutUser);
+userRouter.get("/session", isAuthenticated, getSessionInfo);
 userRouter.get("/refresh", updateAccessToken);
 userRouter.get("/me", isAuthenticated, getUserInfo);
 userRouter.put("/update-user-info", isAuthenticated, updateUserInfo);
