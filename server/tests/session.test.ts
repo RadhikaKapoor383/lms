@@ -19,21 +19,25 @@ import {
 beforeEach(() => store.clear());
 
 describe("getSessionLimits", () => {
-  it("defaults to a 2 hour cap and 30 minutes idle", () => {
-    expect(getSessionLimits({} as any)).toEqual({ maxSeconds: 7200, idleSeconds: 1800 });
+  it("defaults to NO hard cap (active users stay logged in) and 30 minutes idle", () => {
+    expect(getSessionLimits({} as any)).toEqual({ maxSeconds: 0, idleSeconds: 1800 });
   });
-  it("reads SESSION_MAX_HOURS and SESSION_IDLE_MINUTES", () => {
+  it("reads SESSION_MAX_HOURS (optional cap) and SESSION_IDLE_MINUTES", () => {
     expect(getSessionLimits({ SESSION_MAX_HOURS: "1", SESSION_IDLE_MINUTES: "10" } as any)).toEqual({ maxSeconds: 3600, idleSeconds: 600 });
     expect(getSessionLimits({ SESSION_MAX_HOURS: "0.5" } as any).maxSeconds).toBe(1800);
   });
-  it("ignores nonsense and falls back to the defaults", () => {
+  it("ignores nonsense and falls back to the defaults (no cap, 30 min)", () => {
     for (const bad of ["abc", "", "0", "-5", "NaN"]) {
-      expect(getSessionLimits({ SESSION_MAX_HOURS: bad, SESSION_IDLE_MINUTES: bad } as any)).toEqual({ maxSeconds: 7200, idleSeconds: 1800 });
+      expect(getSessionLimits({ SESSION_MAX_HOURS: bad, SESSION_IDLE_MINUTES: bad } as any)).toEqual({ maxSeconds: 0, idleSeconds: 1800 });
     }
   });
 });
 
-describe("hard cap", () => {
+describe("hard cap (only when switched on)", () => {
+  it("with no cap, nobody is ever past it and there is no end time", () => {
+    expect(isPastMax(1000, 0, 1000 + 10 * 86400)).toBe(false);
+    expect(secondsUntilMax(1000, 0, 5000)).toBe(Infinity);
+  });
   it("counts from the moment of login", () => {
     expect(secondsUntilMax(1000, 7200, 1000)).toBe(7200);
     expect(secondsUntilMax(1000, 7200, 4000)).toBe(4200);
@@ -52,7 +56,9 @@ describe("messages", () => {
     expect(describeDuration(90)).toBe("90 seconds");
   });
   it("session-over errors are 401 with a code the website can act on", () => {
+    process.env.SESSION_MAX_HOURS = "2";
     const idle = sessionEndedError("idle"); const max = sessionEndedError("max");
+    delete process.env.SESSION_MAX_HOURS;
     expect([idle.statusCode, idle.code]).toEqual([401, "SESSION_IDLE"]);
     expect([max.statusCode, max.code]).toEqual([401, "SESSION_MAX"]);
     expect(idle.message).toMatch(/inactivity/);
