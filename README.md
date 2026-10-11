@@ -84,9 +84,14 @@ Certificates, discussions, forgot/reset password, review moderation, analytics a
 - The old lesson Q&A and the newer Discussions system overlap; one of them should be retired.
 
 **Security follow-ups**
-- Editing a published course does not send it back for approval (a product decision).
-- Refresh tokens are not rotated or individually revoked.
+- Refresh tokens are not rotated on every use (they are tied to a login session, which can be ended individually).
 - Only pure logic has automated tests (`npm test` in `server/`); there are no API-level integration tests yet.
+
+## Decisions worth knowing
+
+- **Editing a published course** keeps it published - no re-approval (by design).
+- **Quiz time limits** are enforced by the server. When time runs out the attempt is used up with a score of 0, whether the student submits late or just leaves (a 10 second grace covers the auto-submit). Quizzes with no time limit are never timed out.
+- **Login sessions**: each login lasts at most 2 hours, and ends sooner after 30 minutes with no activity. Change them with `SESSION_MAX_HOURS` and `SESSION_IDLE_MINUTES` in `server/.env`. The website warns a minute before an idle logout and five minutes before the 2 hour limit.
 
 ## Tech stack
 
