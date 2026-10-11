@@ -36,6 +36,9 @@ export default function QuizAttemptsPage() {
                 >
                   {a.passed ? "Passed" : "Failed"}
                 </span>
+                {a.timedOut && (
+                  <span className="rounded-full bg-clay/20 px-2.5 py-0.5 text-xs text-clay">Timed out</span>
+                )}
               </div>
               <p className="text-sm text-ink/60 dark:text-parchment/60">
                 Attempt {a.attemptNumber} · {new Date(a.submittedAt).toLocaleString()}
