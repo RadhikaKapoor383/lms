@@ -15,6 +15,8 @@ import {
 } from "../services/quizGrading.service";
 import { isPastQuizDeadline } from "../services/quizTiming.service";
 import { recordTimedOutAttempt, settleExpiredStart } from "../services/quizAttempt.service";
+import { summarizeAttempts } from "../services/quizSummary.service";
+import EnrollmentModel from "../models/enrollment.model";
 import CourseModel from "../models/course.model";
 import NotificationModel from "../models/notification.model";
 import { tryIssueCertificate } from "../services/certificate.service";
@@ -532,6 +534,57 @@ export const getQuizAttempts = CatchAsyncError(
         .sort({ submittedAt: -1 });
 
       res.status(200).json({ success: true, attempts });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+// ------------------- Student: every quiz across my courses -------------------
+// The student sidebar's "Quizzes" page: one list instead of opening each course.
+// Only courses the student is enrolled in (not revoked) are included, and no
+// answers or questions are sent - just titles, limits and how they are doing.
+
+export const getMyQuizzes = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const studentId = req.user?._id;
+      const enrollments = await EnrollmentModel.find({
+        student: studentId,
+        status: { $ne: "revoked" },
+      }).select("course");
+      const courseIds = enrollments.map((e) => e.course);
+
+      const quizzes = await QuizModel.find({ course: { $in: courseIds } })
+        .populate("course", "name")
+        .sort({ createdAt: -1 });
+
+      // A timed attempt that ran out while the student was away is used up.
+      await Promise.all(quizzes.map((q) => settleExpiredStart(q, studentId)));
+
+      const attempts = await QuizAttemptModel.find({
+        student: studentId,
+        quiz: { $in: quizzes.map((q) => q._id) },
+      }).select("quiz percentage passed submittedAt");
+
+      const byQuiz = new Map<string, typeof attempts>();
+      for (const a of attempts) {
+        const key = String(a.quiz);
+        byQuiz.set(key, [...(byQuiz.get(key) || []), a]);
+      }
+
+      const list = quizzes.map((q) => ({
+        _id: q._id,
+        title: q.title,
+        course: q.course, // { _id, name }
+        questionCount: q.questions.length,
+        timeLimitMinutes: q.timeLimitMinutes || null,
+        maxAttempts: q.maxAttempts,
+        passingScore: q.passingScore,
+        ...summarizeAttempts(byQuiz.get(String(q._id)) || [], q.maxAttempts),
+      }));
+
+      res.status(200).json({ success: true, quizzes: list });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }

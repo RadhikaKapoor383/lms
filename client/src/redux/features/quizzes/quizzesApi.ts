@@ -11,6 +11,16 @@ export const quizzesApi = apiSlice.injectEndpoints({
       providesTags: ["Quizzes"],
     }),
 
+    // Every quiz across the student's courses, with how they are doing on each.
+    getMyQuizzes: builder.query({
+      query: () => ({
+        url: "my-quizzes",
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Quizzes"],
+    }),
+
     getQuiz: builder.query({
       query: (id: string) => ({
         url: `quizzes/${id}`,
@@ -86,6 +96,7 @@ export const quizzesApi = apiSlice.injectEndpoints({
 });
 
 export const {
+  useGetMyQuizzesQuery,
   useGetCourseQuizzesQuery,
   useGetQuizQuery,
   useCreateQuizMutation,

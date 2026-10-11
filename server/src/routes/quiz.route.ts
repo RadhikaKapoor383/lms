@@ -11,6 +11,7 @@ import {
   editQuiz,
   getCourseQuizzes,
   getQuiz,
+  getMyQuizzes,
   getQuizAttempts,
   startQuizAttempt,
   submitQuizAttempt,
@@ -30,6 +31,7 @@ quizRouter.post(
 // Role-aware (student vs instructor/admin) inside the controller via
 // hasCourseContentAccess, so no ownership middleware on this one.
 quizRouter.get("/courses/:id/quizzes", isAuthenticated, getCourseQuizzes);
+quizRouter.get("/my-quizzes", isAuthenticated, authorizeRoles("student"), getMyQuizzes);
 
 // From here, :id = quizId.
 quizRouter.get("/quizzes/:id", isAuthenticated, getQuiz);
