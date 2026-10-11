@@ -80,7 +80,7 @@ Certificates, discussions, forgot/reset password, review moderation, analytics a
 **Platform**
 - Fine-grained permissions (roles exist; there is no per-permission editor).
 - Real-time notifications (Socket.io) - notifications are saved and polled.
-- Global instructor/student pages for all assignments / quizzes / students (today they live inside each course).
+- Global instructor pages that gather all students / assignments / quizzes in one place (today an instructor opens them one course at a time; students already have global Assignments and Quizzes pages).
 - The old lesson Q&A and the newer Discussions system overlap; one of them should be retired.
 
 **Security follow-ups**
