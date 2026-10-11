@@ -23,6 +23,8 @@ export interface IQuizAttempt extends Document {
   percentage: number;
   passed: boolean;
   attemptNumber: number;
+  // true when the time ran out before it was submitted: counted as an attempt, score 0
+  timedOut: boolean;
   startedAt: Date;
   submittedAt: Date;
 }
@@ -47,6 +49,7 @@ const quizAttemptSchema = new Schema<IQuizAttempt>(
     percentage: { type: Number, required: true },
     passed: { type: Boolean, required: true },
     attemptNumber: { type: Number, required: true },
+    timedOut: { type: Boolean, default: false },
     startedAt: { type: Date, required: true },
     submittedAt: { type: Date, required: true },
   },
