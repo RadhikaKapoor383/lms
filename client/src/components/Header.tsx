@@ -14,16 +14,28 @@ const navLinks = [
   { label: "FAQ", href: "/faq" },
 ];
 
-export default function Header() {
+// Pages with a sidebar already list some of these links, so showing them in the
+// navbar too would be a duplicate. A page can hide the navbar's copy:
+//   "role"    the "Admin" / "Instructor" / "My learning" link (the sidebar's
+//             first item is the same dashboard)
+//   "profile" your name, which links to your profile
+//   "courses" the public "Courses" link (a student's sidebar has Browse Courses)
+export type HeaderHidable = "role" | "profile" | "courses";
+
+export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
   const { theme, setTheme } = useTheme();
   const { user } = useAppSelector((state) => state.auth);
   const [logout] = useLazyLogOutQuery();
   const [open, setOpen] = useState(false);
 
   // Each role gets its own entry point: admin, instructor area, or student dashboard
-  const roleLink = user?.role && roleHome[user.role as Role]
+  const roleLink = !hide.includes("role") && user?.role && roleHome[user.role as Role]
     ? { href: roleHome[user.role as Role], label: roleLabel[user.role as Role] }
     : null;
+
+  const visibleNavLinks = hide.includes("courses")
+    ? navLinks.filter((link) => link.href !== "/courses")
+    : navLinks;
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink-light bg-ink text-parchment">
@@ -33,7 +45,7 @@ export default function Header() {
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          {navLinks.map((link) => (
+          {visibleNavLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -61,9 +73,13 @@ export default function Header() {
                   {roleLink.label}
                 </Link>
               )}
-              <Link href="/profile" className="text-sm text-parchment/80 hover:text-mustard">
-                {user.name}
-              </Link>
+              {hide.includes("profile") ? (
+                <span className="text-sm text-parchment/80">{user.name}</span>
+              ) : (
+                <Link href="/profile" className="text-sm text-parchment/80 hover:text-mustard">
+                  {user.name}
+                </Link>
+              )}
               <button
                 onClick={() => logout(undefined)}
                 className="rounded-full bg-mustard px-4 py-1.5 text-sm font-medium text-ink hover:bg-mustard-dark"
@@ -95,7 +111,7 @@ export default function Header() {
       {open && (
         <div className="border-t border-ink-light px-6 py-4 md:hidden">
           <nav className="flex flex-col gap-3">
-            {navLinks.map((link) => (
+            {visibleNavLinks.map((link) => (
               <Link key={link.href} href={link.href} className="text-parchment/80">
                 {link.label}
               </Link>

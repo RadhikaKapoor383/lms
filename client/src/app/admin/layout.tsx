@@ -10,7 +10,7 @@ export default function AdminLayout({
 }) {
   return (
     <AdminProtected>
-      <Header />
+      <Header hide={["role"]} />
       <main className="mx-auto flex max-w-6xl px-6 py-10">
         <AdminSidebar />
         <div className="flex-1 pl-8">{children}</div>
