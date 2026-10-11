@@ -127,7 +127,17 @@ export default function TakeQuizPage() {
       <>
         <Header />
         <main className="mx-auto max-w-2xl px-6 py-16 text-center">
-          {"score" in attempt ? (
+          {result.timedOut ? (
+            <>
+              <p className="font-display text-3xl text-clay">Time ran out</p>
+              <p className="mt-3 text-ink/70 dark:text-parchment/70">
+                This attempt counted with a score of 0.
+                {typeof result.attemptsRemaining === "number" && result.attemptsRemaining > 0
+                  ? ` You have ${result.attemptsRemaining} attempt${result.attemptsRemaining === 1 ? "" : "s"} left.`
+                  : " You have no attempts left."}
+              </p>
+            </>
+          ) : "score" in attempt ? (
             <>
               <p className="font-display text-5xl text-ink dark:text-parchment">
                 {Math.round(attempt.percentage)}%
