@@ -91,7 +91,7 @@ Certificates, discussions, forgot/reset password, review moderation, analytics a
 
 - **Editing a published course** keeps it published - no re-approval (by design).
 - **Quiz time limits** are enforced by the server. When time runs out the attempt is used up with a score of 0, whether the student submits late or just leaves (a 10 second grace covers the auto-submit). Quizzes with no time limit are never timed out.
-- **Login sessions**: each login lasts at most 2 hours, and ends sooner after 30 minutes with no activity. Change them with `SESSION_MAX_HOURS` and `SESSION_IDLE_MINUTES` in `server/.env`. The website warns a minute before an idle logout and five minutes before the 2 hour limit.
+- **Login sessions**: a login ends after 30 minutes with no activity, and never while the person is active (change the 30 with `SESSION_IDLE_MINUTES` in `server/.env`). The website warns a minute before an idle logout. There is no time cap by default; set `SESSION_MAX_HOURS` if you also want everyone logged out that many hours after logging in (the site then warns five minutes before).
 
 ## Tech stack
 
