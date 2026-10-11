@@ -5,16 +5,26 @@ import {
   createApi,
   fetchBaseQuery,
 } from "@reduxjs/toolkit/query/react";
-import { userLoggedOut } from "../auth/authSlice";
+import { sessionEnded, userLoggedOut } from "../auth/authSlice";
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: process.env.NEXT_PUBLIC_SERVER_URI,
   credentials: "include", // send/receive the httpOnly access_token & refresh_token cookies
 });
 
-// Wraps the base query: if a request comes back unauthorized, try refreshing
-// the access token once via /refresh, then retry the original request.
-// If the refresh itself fails, the session is genuinely over - log out locally.
+// The server answers 401 when you are not (or no longer) logged in, and adds a
+// "code" saying why:
+//   SESSION_IDLE / SESSION_MAX  the login is over (inactive too long, or the hard
+//                               time cap) -> log out and say why. Nothing to retry.
+//   anything else               most often just an expired access token -> renew
+//                               it once via /refresh and retry the request.
+// Other errors (400 validation, 403, 404...) are passed through untouched, so a
+// failed form is never sent twice.
+const SESSION_OVER = ["SESSION_IDLE", "SESSION_MAX"];
+const codeOf = (error: unknown): string | undefined => (error as any)?.data?.code;
+const messageOf = (error: unknown): string =>
+  (error as any)?.data?.message || "Your session has ended. Please log in again.";
+
 const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
@@ -22,7 +32,12 @@ const baseQueryWithReauth: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   let result = await rawBaseQuery(args, api, extraOptions);
 
-  if (result.error && result.error.status === 400) {
+  if (result.error && result.error.status === 401) {
+    if (SESSION_OVER.includes(codeOf(result.error) || "")) {
+      api.dispatch(sessionEnded(messageOf(result.error)));
+      return result;
+    }
+
     const refreshResult = await rawBaseQuery(
       { url: "/refresh", method: "GET" },
       api,
@@ -31,6 +46,8 @@ const baseQueryWithReauth: BaseQueryFn<
 
     if (refreshResult.data) {
       result = await rawBaseQuery(args, api, extraOptions);
+    } else if (SESSION_OVER.includes(codeOf(refreshResult.error) || "")) {
+      api.dispatch(sessionEnded(messageOf(refreshResult.error)));
     } else {
       api.dispatch(userLoggedOut());
     }
