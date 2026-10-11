@@ -10,11 +10,14 @@ import { loginSchema } from "@/utils/validationSchemas";
 import { useLoginMutation } from "@/redux/features/auth/authApi";
 import { Role, roleHome } from "@/types/role";
 import PasswordInput from "@/components/PasswordInput";
+import { useAppSelector } from "@/hooks/redux";
 
 export default function LoginPage() {
   const router = useRouter();
   const [login, { isLoading }] = useLoginMutation();
   const [serverError, setServerError] = useState("");
+  // set when the system logged you out (inactive too long / session time cap)
+  const endedReason = useAppSelector((state) => state.auth.endedReason);
 
   const formik = useFormik({
     initialValues: { email: "", password: "" },
@@ -41,6 +44,14 @@ export default function LoginPage() {
         <p className="mt-2 text-ink/70 dark:text-parchment/70">
           Log in to pick up where you left off.
         </p>
+        {endedReason && (
+          <p
+            role="status"
+            className="mt-4 border border-mustard/50 bg-mustard/10 px-4 py-3 text-sm text-ink dark:text-parchment"
+          >
+            {endedReason}
+          </p>
+        )}
 
         <form onSubmit={formik.handleSubmit} className="mt-8 space-y-5" noValidate>
           <div>
