@@ -13,10 +13,17 @@ import ErrorHandler from "../utils/ErrorHandler";
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import sendMail from "../utils/sendMail";
 import {
-  accessTokenOptions,
-  refreshTokenOptions,
+  buildAuthTokens,
+  describeSession,
   sendToken,
 } from "../utils/jwt";
+import {
+  endSession,
+  getSessionLimits,
+  isPastMax,
+  sessionEndedError,
+  touchSession,
+} from "../utils/session";
 import { redis } from "../utils/redis";
 import { logActivity } from "../utils/auditLog";
 import { validatePassword } from "../utils/passwordPolicy";
@@ -326,7 +333,7 @@ export const loginUser = CatchAsyncError(
       }
 
       await clearRateLimit(emailKey);
-      sendToken(user, 200, res);
+      await sendToken(user, 200, res);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
@@ -335,15 +342,28 @@ export const loginUser = CatchAsyncError(
 
 // ------------------- Logout -------------------
 
+// Works even when the session already ended (so the page can always clear its
+// cookies): it reads the session id from the token WITHOUT requiring the token
+// to still be valid, and only ever ends that one login - other devices keep
+// theirs.
 export const logoutUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.cookie("access_token", "", { maxAge: 1 });
       res.cookie("refresh_token", "", { maxAge: 1 });
 
-      const userId = req.user?._id ? String(req.user._id) : undefined;
-      if (userId) {
-        await redis.del(userId);
+      const token = req.cookies?.access_token as string | undefined;
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.ACCESS_TOKEN as string, {
+            ignoreExpiration: true,
+          }) as JwtPayload;
+          if (typeof decoded.sid === "string") {
+            await endSession(decoded.sid);
+          }
+        } catch {
+          /* not a token we issued - nothing to end */
+        }
       }
 
       res.status(200).json({ success: true, message: "Logged out successfully" });
@@ -359,22 +379,53 @@ export const updateAccessToken = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const refresh_token = req.cookies.refresh_token as string;
+      if (!refresh_token) {
+        return next(new ErrorHandler("Please login to access this resource", 401, "AUTH_REQUIRED"));
+      }
 
-      const decoded = jwt.verify(
-        refresh_token,
-        process.env.REFRESH_TOKEN as string
-      ) as JwtPayload;
+      let decoded: JwtPayload;
+      try {
+        decoded = jwt.verify(refresh_token, process.env.REFRESH_TOKEN as string) as JwtPayload;
+      } catch {
+        // An expired refresh token usually means the session's time cap was
+        // reached (it is made to last about as long as the cap). Read it anyway,
+        // to give that reason instead of a vague one.
+        try {
+          const old = jwt.verify(refresh_token, process.env.REFRESH_TOKEN as string, {
+            ignoreExpiration: true,
+          }) as JwtPayload;
+          if (
+            typeof old.sid === "string" &&
+            typeof old.loginAt === "number" &&
+            isPastMax(old.loginAt, getSessionLimits().maxSeconds)
+          ) {
+            await endSession(old.sid);
+            return next(sessionEndedError("max"));
+          }
+        } catch {
+          /* not a token we issued */
+        }
+        return next(new ErrorHandler("Please login to access this resource", 401, "AUTH_REQUIRED"));
+      }
 
-      const message = "Could not refresh token";
-      if (!decoded) {
-        return next(new ErrorHandler(message, 400));
+      if (typeof decoded.sid !== "string" || typeof decoded.loginAt !== "number") {
+        return next(new ErrorHandler("Please log in again", 401, "AUTH_REQUIRED"));
+      }
+
+      // The same two limits as every other request: the hard cap, and being
+      // idle for too long. Renewing a token never stretches either of them -
+      // the new tokens keep the ORIGINAL login time.
+      if (isPastMax(decoded.loginAt, getSessionLimits().maxSeconds)) {
+        await endSession(decoded.sid);
+        return next(sessionEndedError("max"));
+      }
+      if (!(await touchSession(decoded.sid, String(decoded.id)))) {
+        return next(sessionEndedError("idle"));
       }
 
       const session = await redis.get(decoded.id as string);
       if (!session) {
-        return next(
-          new ErrorHandler("Please login to access this resource", 400)
-        );
+        return next(new ErrorHandler("Please login to access this resource", 401, "AUTH_REQUIRED"));
       }
 
       const user = JSON.parse(session);
@@ -382,33 +433,40 @@ export const updateAccessToken = CatchAsyncError(
       // here so the re-save below cleans the session up.
       delete user.password;
 
-      const accessToken = jwt.sign(
-        { id: user._id },
-        process.env.ACCESS_TOKEN as string,
-        { expiresIn: parseInt(process.env.ACCESS_TOKEN_EXPIRE || "5", 10) * 60 }
-      );
-
-      const newRefreshToken = jwt.sign(
-        { id: user._id },
-        process.env.REFRESH_TOKEN as string,
-        {
-          expiresIn:
-            parseInt(process.env.REFRESH_TOKEN_EXPIRE || "3", 10) * 24 * 60 * 60,
-        }
+      const { accessToken, refreshToken, accessOptions, refreshOptions } = buildAuthTokens(
+        String(user._id),
+        decoded.sid,
+        decoded.loginAt
       );
 
       req.user = user;
 
-      res.cookie("access_token", accessToken, accessTokenOptions);
-      res.cookie("refresh_token", newRefreshToken, refreshTokenOptions);
+      res.cookie("access_token", accessToken, accessOptions);
+      res.cookie("refresh_token", refreshToken, refreshOptions);
 
-      // refresh the rolling session TTL too
+      // refresh the rolling cache TTL too
       await redis.set(user._id, JSON.stringify(user), "EX", 7 * 24 * 60 * 60);
 
-      res.status(200).json({ success: true, accessToken });
+      res.status(200).json({
+        success: true,
+        accessToken,
+        session: describeSession(decoded.loginAt),
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
+  }
+);
+
+// The website asks this on load and every few minutes while someone is really
+// using it. Passing isAuthenticated already restarted the idle clock; the answer
+// tells the page when the hard cap hits so it can warn before it happens.
+export const getSessionInfo = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.sessionInfo) {
+      return next(new ErrorHandler("Please login to access this resource", 401, "AUTH_REQUIRED"));
+    }
+    res.status(200).json({ success: true, session: describeSession(req.sessionInfo.loginAt) });
   }
 );
 
