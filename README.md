@@ -93,6 +93,26 @@ Certificates, discussions, forgot/reset password, review moderation, analytics a
 - **Quiz time limits** are enforced by the server. When time runs out the attempt is used up with a score of 0, whether the student submits late or just leaves (a 10 second grace covers the auto-submit). Quizzes with no time limit are never timed out.
 - **Login sessions**: a login ends after 30 minutes with no activity, and never while the person is active (change the 30 with `SESSION_IDLE_MINUTES` in `server/.env`). The website warns a minute before an idle logout. There is no time cap by default; set `SESSION_MAX_HOURS` if you also want everyone logged out that many hours after logging in (the site then warns five minutes before).
 
+## Sample data for the statistics pages
+
+An empty database makes the admin and instructor statistics look empty. This script fills it with realistic activity, written straight into MongoDB (not through the website): six months of sign-ups, enrolments, lesson progress, quiz attempts, assignment grades, reviews, certificates, discussions, payments and the activity log.
+
+```bash
+cd server
+npm run seed                          # once, if you have no admin yet
+npm run seed:stats                    # shows what it would do and changes nothing
+npm run seed:stats -- --yes           # add the data
+npm run seed:stats -- --yes --reset   # remove what it added, then add it again
+npm run seed:stats -- --yes --remove  # just remove it
+```
+
+- It adds about 150 students, 6 instructors, 17 courses (12 published, a few pending / draft / archived / rejected) and roughly 350 enrolments. Use `--students=300` for more, and `--seed=7` for a different (but repeatable) set.
+- Every seeded account uses the password `Learn@2026` (change it with `SEED_PASSWORD` in `.env`). Instructors: `sana.ahmed@faculty.ledger.example`, `imran.qureshi@...`, and so on. Students: any `...@learners.ledger.example` address.
+- The e-mail addresses end in the reserved `.example` domain, so nothing sent by the platform can reach a real person.
+- `--remove` deletes only what the script added (those accounts, their courses and everything attached to them). Your own accounts and courses are never touched.
+- It refuses to run when `NODE_ENV=production` unless you add `--force`.
+- The website keeps the public course list in Redis for a week. After adding or removing data the script clears that cache (the course list and each course page) so Browse courses shows the change at once. If Redis can't be reached it says so, and you can clear it yourself with `redis-cli DEL allCourses`.
+
 ## Tech stack
 
 ### Frontend
