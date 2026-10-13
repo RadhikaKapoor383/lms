@@ -14,7 +14,8 @@
     "build": "tsc && cp -r src/mails dist/mails",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:stats": "ts-node-dev --transpile-only src/seedStats.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
