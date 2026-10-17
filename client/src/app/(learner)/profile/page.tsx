@@ -9,6 +9,7 @@ import {
   useUpdateProfileMutation,
 } from "@/redux/features/users/usersApi";
 import PasswordInput from "@/components/PasswordInput";
+import ProfileSummary from "@/components/ProfileSummary";
 
 export default function ProfilePage() {
   const { user } = useAppSelector((state) => state.auth);
@@ -372,24 +373,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="mt-10">
-              <h2 className="font-display text-2xl text-ink dark:text-parchment">
-                Enrolled courses
-              </h2>
-              {user.courses?.length ? (
-                <ul className="mt-4 space-y-2">
-                  {user.courses.map((c: any, i: number) => (
-                    <li key={i} className="text-ink/80 dark:text-parchment/80">
-                      — Course ID: {c.courseId}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4 text-ink/60 dark:text-parchment/60">
-                  You haven&apos;t enrolled in anything yet.
-                </p>
-              )}
-            </div>
+            <ProfileSummary role={user.role} />
           </>
         )}
       </main>
