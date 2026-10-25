@@ -14,6 +14,7 @@
     "build": "tsc && cp -r src/mails dist/mails",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "test:api": "vitest run --config vitest.api.config.ts",
     "typecheck": "tsc --noEmit",
     "seed:stats": "ts-node-dev --transpile-only src/seedStats.ts"
   },
