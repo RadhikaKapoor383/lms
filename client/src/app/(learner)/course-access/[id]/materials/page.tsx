@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import Loader from "@/components/Loader";
 import { useGetCourseMaterialsQuery } from "@/redux/features/materials/materialsApi";
+import { useGetCourseContentQuery } from "@/redux/features/courses/coursesApi";
 import { downloadMaterial, formatFileSize } from "@/utils/downloadMaterial";
+import { groupMaterialsByLesson } from "@/utils/materialGroups";
 
 export default function CourseMaterialsStudentPage() {
   const params = useParams();
@@ -13,6 +15,9 @@ export default function CourseMaterialsStudentPage() {
 
   const { data, isLoading, isError } = useGetCourseMaterialsQuery(courseId);
   const materials = data?.materials || [];
+  const { data: contentData } = useGetCourseContentQuery(courseId);
+  const lessons: { _id: string; title: string }[] = contentData?.content || [];
+  const groups = groupMaterialsByLesson(materials, lessons);
 
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
@@ -50,25 +55,32 @@ export default function CourseMaterialsStudentPage() {
           <p className="mt-6 text-ink/60 dark:text-parchment/60">No materials for this course yet.</p>
         )}
 
-        <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
-          {materials.map((m: any) => (
-            <div key={m._id} className="flex items-center justify-between py-4">
-              <div>
-                <p className="font-medium text-ink dark:text-parchment">{m.title}</p>
-                <p className="text-sm text-ink/60 dark:text-parchment/60">
-                  {m.ext.toUpperCase()} · {formatFileSize(m.size)}
-                </p>
-              </div>
-              <button
-                onClick={() => handleDownload(m)}
-                disabled={busyId === m._id}
-                className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
-              >
-                {busyId === m._id ? "Preparing..." : "Download"}
-              </button>
+        {groups.map((group) => (
+          <section key={group.lessonId || "course"} className="mt-8">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-ink/50 dark:text-parchment/50">
+              {group.title}
+            </h2>
+            <div className="mt-2 divide-y divide-parchment-dark dark:divide-ink-light">
+              {group.materials.map((m: any) => (
+                <div key={m._id} className="flex items-center justify-between gap-3 py-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink dark:text-parchment">{m.title}</p>
+                    <p className="text-sm text-ink/60 dark:text-parchment/60">
+                      {m.ext.toUpperCase()} · {formatFileSize(m.size)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDownload(m)}
+                    disabled={busyId === m._id}
+                    className="shrink-0 rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+                  >
+                    {busyId === m._id ? "Preparing..." : "Download"}
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </section>
+        ))}
       </main>
     </>
   );
