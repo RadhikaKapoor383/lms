@@ -22,6 +22,7 @@ dotenv.config();
 import userModel from "./models/user.model";
 import CourseModel from "./models/course.model";
 import CategoryModel from "./models/category.model";
+import DepartmentModel from "./models/department.model";
 import ModuleModel from "./models/module.model";
 import LessonModel from "./models/lesson.model";
 import EnrollmentModel from "./models/enrollment.model";
@@ -41,10 +42,10 @@ import OrderModel from "./models/order.model";
 import CourseMaterialModel from "./models/courseMaterial.model";
 import crypto from "crypto";
 import {
-  ANNOUNCEMENTS_COURSE, ANNOUNCEMENTS_PLATFORM, ASSIGNMENT_TITLES, CATEGORIES, COURSES, DISCUSSION_BODIES,
+  ANNOUNCEMENTS_COURSE, ANNOUNCEMENTS_PLATFORM, ASSIGNMENT_TITLES, CATEGORIES, COURSES, DEPARTMENTS, DISCUSSION_BODIES,
   DISCUSSION_TITLES, FEEDBACK_TEXTS, FIRST_NAMES, INSTRUCTORS, INSTRUCTOR_EMAIL_DOMAIN, LAST_NAMES,
   QUESTION_BANKS, REPLY_BODIES_INSTRUCTOR, REPLY_BODIES_STUDENT, REVIEW_COMMENTS, STUDENT_EMAIL_DOMAIN,
-  SUBMISSION_TEXTS,
+  SUBMISSION_TEXTS, courseDepartment,
 } from "./seedData/statsContent";
 
 // ----------------------------------------------------------------- options
@@ -241,12 +242,24 @@ const main = async () => {
     categoryId[name] = c._id;
   }
 
+  // ---- departments (found by name if they already exist, like categories)
+  const departmentId: Record<string, any> = {};
+  for (const name of DEPARTMENTS) {
+    let d: any = await DepartmentModel.findOne({ name });
+    if (!d) {
+      d = await DepartmentModel.create({ name });
+      add(AuditLogModel, { userId: String(admin._id), userName: admin.name, action: "department.create", targetLabel: name, meta: { seed: true } }, daysAgo(195));
+    }
+    departmentId[name] = d._id;
+  }
+
   // ---- instructors
   const instructors = INSTRUCTORS.map((i, idx) => {
     const created = daysAgo(between(175, 205));
     const row = add(userModel, {
       name: i.name, email: `${i.slug}@${INSTRUCTOR_EMAIL_DOMAIN}`, password: passwordHash, role: "instructor",
       isVerified: true, isActive: true, approvalStatus: "approved", bio: i.bio, expertise: i.expertise, courses: [],
+      department: departmentId[i.department],
     }, created);
     return { ...row, idx };
   });
@@ -261,6 +274,7 @@ const main = async () => {
     const row = add(CourseModel, {
       instructor: owner._id, name: c.name, description: c.description, price: c.price, estimatedPrice: c.price ? Math.round(c.price * 1.8) : undefined,
       thumbnail: { public_id: "", url: "" }, category: categoryId[c.category], level: c.level, durationHours: c.durationHours,
+      ...(courseDepartment(c) ? { department: departmentId[courseDepartment(c) as string] } : {}),
       demoUrl: oneVideo, benefits: [{ title: "Certificate of completion" }, { title: "Lifetime access" }],
       prerequisites: [{ title: c.level === "Beginner" ? "No experience needed" : "Comfortable with the basics" }],
       reviews: [], ratings: 0, purchased: 0, status: c.status, enrollmentMode: "open",
