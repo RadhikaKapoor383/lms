@@ -1,4 +1,4 @@
-# LEARNING MANAGEMENT SYSTEM 
+# LEARNING MANAGEMENT SYSTEM
 
 This repository is a full-stack Learning Management System built with Next.js on the frontend and Express + TypeScript + MongoDB on the backend. It is designed around three user roles: Admin, Instructor, and Student.
 
