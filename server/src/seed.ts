@@ -6,6 +6,7 @@ import connectDB from "./utils/db";
 import userModel from "./models/user.model";
 import CourseModel from "./models/course.model";
 import CategoryModel from "./models/category.model";
+import DepartmentModel from "./models/department.model";
 import { syncModulesAndLessons } from "./services/courseContent.service";
 
 const ADMIN_EMAIL = "admin@ledger.dev";
@@ -17,6 +18,9 @@ const INSTRUCTOR_EMAIL = "instructor@ledger.dev";
 const STUDENT_EMAIL = "student@ledger.dev";
 const DEMO_PASSWORD = "demo1234";
 
+// The demo instructor's department. Their sample course is in it too.
+const DEMO_INSTRUCTOR_DEPARTMENT = "Computer Science";
+
 const sampleCourses = [
   {
     name: "Complete Web Development with the MERN Stack",
@@ -25,6 +29,7 @@ const sampleCourses = [
     price: 49,
     estimatedPrice: 129,
     tags: "Programming",
+    department: "Computer Science",
     level: "Beginner",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
     status: "Published",
@@ -67,6 +72,7 @@ const sampleCourses = [
     price: 39,
     estimatedPrice: 89,
     tags: "Digital Marketing",
+    department: "Business School",
     level: "Beginner",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
     status: "Published",
@@ -96,6 +102,7 @@ const sampleCourses = [
       "You don't need to be a designer to make things that don't look terrible. Learn the rules that matter.",
     price: 35,
     tags: "Graphic Design",
+    department: "Arts & Design",
     level: "Intermediate",
     demoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
     status: "Published",
@@ -171,13 +178,32 @@ const seed = async () => {
     categoryByTag[course.tags] = category;
   }
 
+  // 3b. Create (or find) the sample departments, and put the demo instructor
+  // in one (only if they have none yet - an admin's choice is kept).
+  const departmentByName: Record<string, any> = {};
+  const departmentNames = new Set([DEMO_INSTRUCTOR_DEPARTMENT, ...sampleCourses.map((c) => c.department)]);
+  for (const name of departmentNames) {
+    let department = await DepartmentModel.findOne({ name });
+    if (!department) {
+      department = await DepartmentModel.create({ name });
+      console.log(`Created department: ${name}`);
+    }
+    departmentByName[name] = department;
+  }
+  if (!created.instructor.department) {
+    created.instructor.department = departmentByName[DEMO_INSTRUCTOR_DEPARTMENT]._id;
+    await created.instructor.save();
+    console.log(`Put ${created.instructor.name} in department: ${DEMO_INSTRUCTOR_DEPARTMENT}`);
+  }
+
   // 4. Create sample courses (skip any that already exist by name).
   // The first course belongs to the demo instructor; the rest are unassigned,
   // which lets you test "instructor can edit own course but not others".
   for (const [index, course] of sampleCourses.entries()) {
     const owner = index === 0 ? created.instructor._id : undefined;
-    const { tags, ...courseFields } = course;
+    const { tags, department: departmentName, ...courseFields } = course;
     const category = categoryByTag[tags];
+    const department = departmentByName[departmentName];
 
     const exists = await CourseModel.findOne({ name: course.name });
     if (exists) {
@@ -188,6 +214,10 @@ const seed = async () => {
       }
       if (!exists.category) {
         exists.category = category._id;
+        changed = true;
+      }
+      if (!exists.department) {
+        exists.department = department._id;
         changed = true;
       }
       if (changed) {
@@ -202,6 +232,7 @@ const seed = async () => {
     const newCourse = await CourseModel.create({
       ...courseFieldsNoLessons,
       category: category._id,
+      department: department._id,
       instructor: owner,
     });
     await syncModulesAndLessons(newCourse._id, courseData);
