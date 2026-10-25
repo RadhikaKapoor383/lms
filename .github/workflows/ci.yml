@@ -1,7 +1,8 @@
 name: CI
 
-# Runs on every push and pull request: type-checks both apps and runs the
-# server's unit tests. No database, Redis or email account is needed.
+# Runs on every push and pull request: type-checks both apps and runs their
+# unit and component tests. No database, Redis or email account is needed.
+# (The live API tests and the e2e suite need the running app - see README.)
 on:
   push:
     branches: [main]
@@ -40,3 +41,4 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
+      - run: npm test
