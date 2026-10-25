@@ -196,6 +196,12 @@ export default function AllCoursesPage() {
               >
                 Edit
               </Link>
+              <Link
+                href={`/admin/courses/${course._id}/completion`}
+                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Rules
+              </Link>
               {confirmId === course._id ? (
                 <>
                   <button

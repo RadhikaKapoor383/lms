@@ -60,6 +60,7 @@ export default function EditCoursePage() {
           }}
           onSubmit={handleSubmit}
           isSubmitting={isSaving}
+          courseId={id}
           submitLabel="Save changes"
         />
       </div>

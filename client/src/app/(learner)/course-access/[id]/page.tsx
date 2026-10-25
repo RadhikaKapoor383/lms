@@ -8,10 +8,10 @@ import VideoPlayer from "@/components/VideoPlayer";
 import { useAppSelector } from "@/hooks/redux";
 import { useGetCertificateStatusQuery } from "@/redux/features/certificates/certificatesApi";
 import ReviewForm from "@/components/ReviewForm";
-import {
-  useAddQuestionMutation,
-  useGetCourseContentQuery,
-} from "@/redux/features/courses/coursesApi";
+import LessonFiles from "@/components/LessonFiles";
+import { pendingSteps } from "@/utils/certificateProgress";
+import { useGetCourseContentQuery } from "@/redux/features/courses/coursesApi";
+import LessonDiscussions from "@/components/LessonDiscussions";
 import {
   useGetCourseProgressQuery,
   useUpdateLessonProgressMutation,
@@ -25,7 +25,6 @@ export default function CourseAccessPage() {
   const isStudent = user?.role === "student";
 
   const { data, isLoading, isError, error } = useGetCourseContentQuery(courseId);
-  const [addQuestion, { isLoading: isAsking }] = useAddQuestionMutation();
   // Progress only exists for students - an admin/instructor previewing a
   // course has no enrollment record to track.
   const { data: progressData } = useGetCourseProgressQuery(courseId, { skip: !isStudent });
@@ -35,9 +34,6 @@ export default function CourseAccessPage() {
   const certStatus = certData?.status;
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const [questionText, setQuestionText] = useState("");
-  const [askError, setAskError] = useState("");
-  const [askSuccess, setAskSuccess] = useState(false);
 
   const content = data?.content || [];
   const activeLesson = content[activeIndex];
@@ -52,26 +48,6 @@ export default function CourseAccessPage() {
       lessonId: activeLesson._id,
       completed: !isActiveLessonDone,
     });
-  };
-
-  const handleAskQuestion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAskError("");
-    setAskSuccess(false);
-
-    if (!questionText.trim()) return;
-
-    try {
-      await addQuestion({
-        question: questionText,
-        courseId,
-        contentId: activeLesson._id,
-      }).unwrap();
-      setQuestionText("");
-      setAskSuccess(true);
-    } catch (err: any) {
-      setAskError(err?.data?.message || "Could not submit your question");
-    }
   };
 
   return (
@@ -123,22 +99,19 @@ export default function CourseAccessPage() {
                   View certificate
                 </Link>
               </p>
-            ) : certStatus.lessonsComplete && certStatus.pendingQuizzes.length > 0 ? (
+            ) : pendingSteps(certStatus).length === 0 ? (
               <p className="text-ink dark:text-parchment">
-                All lessons done. Pass{" "}
-                {certStatus.pendingQuizzes.map((q: any) => `"${q.title}"`).join(", ")} to earn your
-                certificate.{" "}
-                <Link
-                  href={`/course-access/${courseId}/quizzes`}
-                  className="text-mustard-dark underline dark:text-mustard"
-                >
-                  Go to quizzes
-                </Link>
+                You&apos;ve done everything this course asks. Your certificate appears here shortly.
               </p>
             ) : (
-              <p className="text-ink/60 dark:text-parchment/60">
-                Finish every lesson and pass every quiz to earn a certificate.
-              </p>
+              <div className="text-ink dark:text-parchment">
+                <p>To earn the certificate for this course:</p>
+                <ul className="mt-1 list-disc pl-5 text-ink/70 dark:text-parchment/70">
+                  {pendingSteps(certStatus).map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         )}
@@ -155,7 +128,12 @@ export default function CourseAccessPage() {
         {content.length > 0 && activeLesson && (
           <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
             <div>
-              <VideoPlayer videoUrl={activeLesson.videoUrl} />
+              <VideoPlayer
+                videoUrl={activeLesson.videoUrl}
+                courseId={courseId}
+                lessonId={activeLesson._id}
+                hasVideoUpload={activeLesson.hasVideoUpload}
+              />
 
               <div className="mt-6 flex items-center justify-between gap-4">
                 <h1 className="font-display text-2xl text-ink dark:text-parchment">
@@ -179,54 +157,9 @@ export default function CourseAccessPage() {
                 {activeLesson.description}
               </p>
 
-              <div className="mt-10 border-t border-parchment-dark pt-6 dark:border-ink-light">
-                <h2 className="font-display text-xl text-ink dark:text-parchment">
-                  Ask a question
-                </h2>
-                <form onSubmit={handleAskQuestion} className="mt-4 space-y-3">
-                  <textarea
-                    value={questionText}
-                    onChange={(e) => setQuestionText(e.target.value)}
-                    rows={3}
-                    placeholder="What's unclear about this lesson?"
-                    className="w-full border border-parchment-dark bg-transparent p-3 outline-none focus:border-mustard dark:border-ink-light"
-                  />
-                  {askError && <p className="text-sm text-clay">{askError}</p>}
-                  {askSuccess && (
-                    <p className="text-sm text-ink-light dark:text-mustard">
-                      Question submitted.
-                    </p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={isAsking}
-                    className="rounded-full bg-mustard px-5 py-2 text-sm font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
-                  >
-                    {isAsking ? "Submitting..." : "Submit question"}
-                  </button>
-                </form>
+              <LessonFiles courseId={courseId} lessonId={activeLesson._id} />
 
-                {activeLesson.questions?.length > 0 && (
-                  <div className="mt-8 space-y-4">
-                    {activeLesson.questions.map((q: any, i: number) => (
-                      <div key={i} className="border-l-2 border-parchment-dark pl-4 dark:border-ink-light">
-                        <p className="text-sm font-medium text-ink dark:text-parchment">
-                          {q.user?.name || "Student"}
-                        </p>
-                        <p className="mt-1 text-ink/80 dark:text-parchment/80">{q.question}</p>
-                        {q.questionReplies?.map((r: any, j: number) => (
-                          <div key={j} className="mt-2 ml-4 border-l-2 border-mustard pl-4">
-                            <p className="text-sm font-medium text-mustard-dark dark:text-mustard">
-                              {r.user?.role === "admin" ? "Instructor" : r.user?.name}
-                            </p>
-                            <p className="mt-1 text-ink/80 dark:text-parchment/80">{r.answer}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <LessonDiscussions courseId={courseId} lessonId={activeLesson._id} />
             </div>
 
             <aside>
