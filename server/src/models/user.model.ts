@@ -33,6 +33,9 @@ export interface IUser extends Document {
   approvalStatus?: ApprovalStatus;
   bio?: string;
   expertise?: string[];
+  // Instructors only, optional. Set by an admin; a new course an instructor
+  // creates without choosing a department gets this one.
+  department?: mongoose.Types.ObjectId | null;
   createdAt?: Date; // added by the schema's timestamps option
   // SHA-256 of the emailed reset token (never the token itself) and its expiry.
   passwordResetToken?: string;
@@ -81,6 +84,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     approvalStatus: { type: String, enum: APPROVAL_STATUSES, default: "approved" },
     bio: { type: String, maxlength: 500, default: "" },
     expertise: { type: [String], default: [] },
+    department: { type: Schema.Types.ObjectId, ref: "Department", index: true },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
     courses: [
