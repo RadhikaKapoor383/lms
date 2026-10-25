@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDuration } from "./analytics";
+import { courseDuration, departmentName } from "@/utils/courseMeta";
 
 const tagColors: Record<string, string> = {
   Programming: "#B8563F",
@@ -11,6 +11,8 @@ const tagColors: Record<string, string> = {
 export default function CourseCard({ course }: { course: any }) {
   const categoryName = course.category?.name || "";
   const tagColor = tagColors[categoryName] || "#D9A441";
+  const duration = courseDuration(course);
+  const department = departmentName(course);
 
   return (
     <Link
@@ -21,7 +23,7 @@ export default function CourseCard({ course }: { course: any }) {
       <div className="flex items-center justify-between px-5 pt-4 text-xs uppercase tracking-wide text-ink/50 dark:text-parchment/50">
         <span>
           {course.level}
-          {course.durationHours ? ` · ${course.durationHours}h` : ""}
+          {duration ? ` · ${duration}` : ""}
         </span>
         <span>{categoryName}</span>
       </div>
@@ -33,12 +35,12 @@ export default function CourseCard({ course }: { course: any }) {
         <p className="mt-2 line-clamp-2 text-sm text-ink/70 dark:text-parchment/70">
           {course.description}
         </p>
-        {/* extras the search results carry (the plain course list doesn't) */}
-        {(course.instructor?.name || course.durationMinutes > 0 || course.reviewCount > 0) && (
+        {/* extras the search results carry (the plain course list has only the department) */}
+        {(department || course.instructor?.name || course.reviewCount > 0) && (
           <p className="mt-3 text-xs text-ink/60 dark:text-parchment/60">
             {[
+              department,
               course.instructor?.name,
-              formatDuration(course.durationMinutes),
               course.reviewCount > 0 ? `★ ${course.ratings} (${course.reviewCount})` : "",
             ]
               .filter(Boolean)

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useGetCategoriesQuery } from "@/redux/features/categories/categoriesApi";
+import { useGetDepartmentsQuery } from "@/redux/features/departments/departmentsApi";
 
 type Benefit = { title: string };
 type Link = { title: string; url: string };
@@ -26,6 +27,7 @@ export type CourseFormValues = {
   price: number;
   estimatedPrice: number;
   category: string; // Category._id
+  department: string; // Department._id, "" = no department
   enrollmentMode: "open" | "manual" | "code";
   // Only sent when set to a non-empty value (a new code, or changing one).
   // Leaving it blank on edit keeps whatever code is already saved.
@@ -63,6 +65,7 @@ export default function CourseForm({
   isSubmitting,
   submitLabel = "Publish course",
   showStatus = true,
+  departmentHint,
 }: {
   initialValues?: Partial<CourseFormValues>;
   onSubmit: (values: CourseFormValues) => void;
@@ -70,9 +73,13 @@ export default function CourseForm({
   submitLabel?: string;
   // Instructors don't control status (admin approves), so their pages hide it
   showStatus?: boolean;
+  // Shown under the department select, e.g. what leaving it empty does
+  departmentHint?: string;
 }) {
   const { data: categoriesData, isLoading: categoriesLoading } = useGetCategoriesQuery(undefined);
   const categories = categoriesData?.categories || [];
+  const { data: departmentsData, isLoading: departmentsLoading } = useGetDepartmentsQuery(undefined);
+  const departments = departmentsData?.departments || [];
 
   const [values, setValues] = useState<CourseFormValues>({
     name: initialValues?.name || "",
@@ -80,6 +87,7 @@ export default function CourseForm({
     price: initialValues?.price || 0,
     estimatedPrice: initialValues?.estimatedPrice || 0,
     category: initialValues?.category || "",
+    department: initialValues?.department || "",
     enrollmentMode: initialValues?.enrollmentMode || "open",
     enrollmentCode: "",
     level: initialValues?.level || "Beginner",
@@ -299,6 +307,33 @@ export default function CourseForm({
               <p className="mt-1 text-xs text-clay">
                 No categories yet - ask an admin to add one.
               </p>
+            )}
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="department">
+              Department
+            </label>
+            <select
+              id="department"
+              className={inputClass}
+              value={values.department}
+              onChange={(e) => setValues((v) => ({ ...v, department: e.target.value }))}
+            >
+              <option value="">{departmentsLoading ? "Loading..." : "No department"}</option>
+              {departments.map((d: any) => (
+                <option key={d._id} value={d._id}>
+                  {d.name}
+                </option>
+              ))}
+              {/* keep a saved department visible even if the list doesn't have it (yet) */}
+              {values.department &&
+                !departmentsLoading &&
+                !departments.some((d: any) => d._id === values.department) && (
+                  <option value={values.department}>Current department</option>
+                )}
+            </select>
+            {departmentHint && (
+              <p className="mt-1 text-xs text-ink/60 dark:text-parchment/60">{departmentHint}</p>
             )}
           </div>
           <div>
