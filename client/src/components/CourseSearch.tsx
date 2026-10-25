@@ -4,12 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import CourseCard from "./CourseCard";
 import Loader from "./Loader";
 import { useGetCourseFiltersQuery, useSearchCoursesQuery } from "@/redux/features/courses/coursesApi";
-
-const DURATION_LABELS: Record<string, string> = {
-  short: "Under 2 hours",
-  medium: "2 to 10 hours",
-  long: "Over 10 hours",
-};
+import { toDurationOptions } from "@/utils/courseMeta";
 const ENROLLMENT_LABELS: Record<string, string> = {
   open: "Open enrollment",
   code: "Needs an enrollment code",
@@ -22,7 +17,7 @@ const SORT_LABELS: Record<string, string> = {
   name: "Name (A to Z)",
 };
 
-const EMPTY = { category: "", level: "", instructor: "", duration: "", enrollment: "" };
+const EMPTY = { category: "", department: "", level: "", instructor: "", duration: "", enrollment: "" };
 
 const selectClass =
   "border border-parchment-dark bg-transparent px-3 py-2 text-sm text-ink dark:border-ink-light dark:text-parchment";
@@ -62,6 +57,8 @@ export default function CourseSearch() {
   const { data: options } = useGetCourseFiltersQuery(undefined);
 
   const courses: any[] = data?.courses || [];
+  const departments: any[] = options?.departments || [];
+  const durationOptions = toDurationOptions(options?.durations);
   const totalPages: number = data?.totalPages || 1;
   const anyFilter = !!q || Object.values(filters).some(Boolean);
 
@@ -94,6 +91,23 @@ export default function CourseSearch() {
           ))}
         </select>
 
+        {/* only once some published course has a department, so it never leads nowhere */}
+        {(departments.length > 0 || filters.department) && (
+          <select
+            aria-label="Department"
+            value={filters.department}
+            onChange={(e) => setFilter("department", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All departments</option>
+            {departments.map((d: any) => (
+              <option key={d._id} value={d._id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         <select aria-label="Level" value={filters.level} onChange={(e) => setFilter("level", e.target.value)} className={selectClass}>
           <option value="">Any level</option>
           {(options?.levels || []).map((l: string) => (
@@ -114,9 +128,9 @@ export default function CourseSearch() {
 
         <select aria-label="Duration" value={filters.duration} onChange={(e) => setFilter("duration", e.target.value)} className={selectClass}>
           <option value="">Any length</option>
-          {(options?.durations || []).map((d: string) => (
-            <option key={d} value={d}>
-              {DURATION_LABELS[d] || d}
+          {durationOptions.map((d) => (
+            <option key={d.value} value={d.value}>
+              {d.label}
             </option>
           ))}
         </select>
