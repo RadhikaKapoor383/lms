@@ -17,6 +17,7 @@ import announcementRouter from "./routes/announcement.route";
 import auditLogRouter from "./routes/auditLog.route";
 import enrollmentRouter from "./routes/enrollment.route";
 import categoryRouter from "./routes/category.route";
+import departmentRouter from "./routes/department.route";
 import assignmentRouter from "./routes/assignment.route";
 import quizRouter from "./routes/quiz.route";
 import certificateRouter from "./routes/certificate.route";
@@ -85,6 +86,7 @@ app.use(
   auditLogRouter,
   enrollmentRouter,
   categoryRouter,
+  departmentRouter,
   assignmentRouter,
   quizRouter,
   certificateRouter,
