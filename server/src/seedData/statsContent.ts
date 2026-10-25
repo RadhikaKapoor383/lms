@@ -23,16 +23,21 @@ export interface IInstructorSeed {
   slug: string;
   bio: string;
   expertise: string[];
+  department: string; // one of DEPARTMENTS
 }
 
 export const INSTRUCTORS: IInstructorSeed[] = [
-  { name: "Sana Ahmed", slug: "sana.ahmed", bio: "Software engineer turned teacher. Ten years of building web products and mentoring juniors.", expertise: ["JavaScript", "React", "TypeScript"] },
-  { name: "Imran Qureshi", slug: "imran.qureshi", bio: "Backend developer who likes simple, well-tested APIs.", expertise: ["Node.js", "Databases", "APIs"] },
-  { name: "Nadia Farooq", slug: "nadia.farooq", bio: "Data analyst and educator. Explains statistics with real examples.", expertise: ["Python", "Statistics", "Machine learning"] },
-  { name: "Kamran Mirza", slug: "kamran.mirza", bio: "Growth marketer who has run campaigns for startups and agencies.", expertise: ["SEO", "Social media", "Analytics"] },
-  { name: "Hina Baig", slug: "hina.baig", bio: "Product designer. Believes good design is mostly good decisions.", expertise: ["UI design", "Typography", "Figma"] },
-  { name: "Faisal Rehman", slug: "faisal.rehman", bio: "Operations manager and certified project manager.", expertise: ["Project management", "Excel", "Operations"] },
+  { name: "Sana Ahmed", slug: "sana.ahmed", bio: "Software engineer turned teacher. Ten years of building web products and mentoring juniors.", expertise: ["JavaScript", "React", "TypeScript"], department: "Computer Science" },
+  { name: "Imran Qureshi", slug: "imran.qureshi", bio: "Backend developer who likes simple, well-tested APIs.", expertise: ["Node.js", "Databases", "APIs"], department: "Computer Science" },
+  { name: "Nadia Farooq", slug: "nadia.farooq", bio: "Data analyst and educator. Explains statistics with real examples.", expertise: ["Python", "Statistics", "Machine learning"], department: "Data & Analytics" },
+  { name: "Kamran Mirza", slug: "kamran.mirza", bio: "Growth marketer who has run campaigns for startups and agencies.", expertise: ["SEO", "Social media", "Analytics"], department: "Business School" },
+  { name: "Hina Baig", slug: "hina.baig", bio: "Product designer. Believes good design is mostly good decisions.", expertise: ["UI design", "Typography", "Figma"], department: "Arts & Design" },
+  { name: "Faisal Rehman", slug: "faisal.rehman", bio: "Operations manager and certified project manager.", expertise: ["Project management", "Excel", "Operations"], department: "Business School" },
 ];
+
+// Departments group courses and instructors. A course is in its instructor's
+// department unless the course says otherwise (see ICourseSeed.department).
+export const DEPARTMENTS = ["Computer Science", "Data & Analytics", "Business School", "Arts & Design"];
 
 export const CATEGORIES = ["Web Development", "Data Science", "Digital Marketing", "Graphic Design", "Business Skills"];
 
@@ -45,6 +50,9 @@ export interface ICourseSeed {
   level: "Beginner" | "Intermediate" | "Advanced";
   price: number; // 0 = free
   durationHours: number;
+  // Leave out to use the instructor's department; a name to put the course in
+  // another one; null for a course with no department at all.
+  department?: string | null;
   status: CourseStatus;
   popularity: number; // relative share of enrolments
   description: string;
@@ -82,7 +90,7 @@ export const COURSES: ICourseSeed[] = [
     ],
   },
   {
-    name: "Modern CSS and Responsive Design", category: "Web Development", instructor: 4, level: "Beginner", price: 0, durationHours: 8, status: "Published", popularity: 5,
+    name: "Modern CSS and Responsive Design", category: "Web Development", instructor: 4, department: "Computer Science", level: "Beginner", price: 0, durationHours: 8, status: "Published", popularity: 5,
     description: "Flexbox, grid and the habits that make layouts work on every screen.",
     modules: [
       m("Layout", "The box model without the confusion", "Flexbox in an afternoon", "CSS grid for page layouts"),
@@ -99,7 +107,7 @@ export const COURSES: ICourseSeed[] = [
     ],
   },
   {
-    name: "Statistics for Decision Making", category: "Data Science", instructor: 2, level: "Intermediate", price: 25, durationHours: 12, status: "Published", popularity: 4,
+    name: "Statistics for Decision Making", category: "Data Science", instructor: 2, department: null, level: "Intermediate", price: 25, durationHours: 12, status: "Published", popularity: 4,
     description: "Averages, variation, probability and testing - explained with decisions you actually make.",
     modules: [
       m("Describing data", "Mean, median and spread", "Distributions in pictures", "Spotting outliers"),
@@ -314,3 +322,7 @@ export const ANNOUNCEMENTS_PLATFORM = [
   { title: "Scheduled maintenance", message: "The platform will be briefly unavailable on Sunday night for maintenance. Your progress is safe." },
   { title: "New: certificates", message: "Complete a course and pass its quizzes to earn a verifiable certificate you can download." },
 ];
+
+// The department a seeded course ends up in (null = none).
+export const courseDepartment = (c: ICourseSeed): string | null =>
+  c.department === undefined ? INSTRUCTORS[c.instructor].department : c.department;
