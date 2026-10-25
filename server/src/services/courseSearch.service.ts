@@ -8,18 +8,36 @@ export const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
 export const SORTS = ["newest", "rating", "popular", "name"] as const;
 export const ENROLLMENT_FILTERS = ["open", "code", "manual"] as const;
 
-// Course length is the sum of its lessons' video minutes (Course has no
-// duration field of its own). The buckets are in minutes.
+// A course's length, in minutes, is the total the instructor typed in the
+// course form (durationHours), and only when they left that empty, the sum of
+// its lessons' video minutes. The buckets are in minutes; each has the label
+// people see in the filter.
 export const DURATION_BUCKETS = {
-  short: { min: 0, max: 120 }, // up to 2 hours
-  medium: { min: 120, max: 600 }, // 2 to 10 hours
-  long: { min: 600, max: Infinity }, // over 10 hours
+  short: { min: 0, max: 120, label: "Up to 2 hours" },
+  medium: { min: 120, max: 600, label: "2 to 10 hours" },
+  long: { min: 600, max: Infinity, label: "Over 10 hours" },
 } as const;
 export type DurationBucket = keyof typeof DURATION_BUCKETS;
+
+// For the filter dropdown: [{ value: "short", label: "Up to 2 hours" }, ...]
+export const DURATION_OPTIONS = (Object.keys(DURATION_BUCKETS) as DurationBucket[]).map((value) => ({
+  value,
+  label: DURATION_BUCKETS[value].label,
+}));
+
+// The instructor's hours win; 0, empty or nonsense falls back to the lessons.
+export const effectiveDurationMinutes = (durationHours: unknown, lessonMinutes: number): number => {
+  const hours = typeof durationHours === "number" ? durationHours : Number(durationHours);
+  if (durationHours !== null && durationHours !== undefined && durationHours !== "" && Number.isFinite(hours) && hours > 0) {
+    return Math.round(hours * 60);
+  }
+  return Math.max(0, Math.round(lessonMinutes || 0));
+};
 
 export interface ICourseSearchParams {
   q?: string;
   category?: string;
+  department?: string;
   instructor?: string;
   level?: (typeof LEVELS)[number];
   duration?: DurationBucket;
@@ -46,7 +64,7 @@ export const parseCourseSearch = (
 ): { params: ICourseSearchParams } | { error: string } => {
   const params: ICourseSearchParams = { sort: "newest", page: 1, limit: 12 };
 
-  for (const key of ["q", "category", "instructor", "level", "duration", "enrollment", "sort", "page", "limit"]) {
+  for (const key of ["q", "category", "department", "instructor", "level", "duration", "enrollment", "sort", "page", "limit"]) {
     if (query[key] !== undefined && typeof query[key] !== "string") {
       return { error: `Invalid value for ${key}` };
     }
@@ -58,7 +76,7 @@ export const parseCourseSearch = (
     params.q = q;
   }
 
-  for (const key of ["category", "instructor"] as const) {
+  for (const key of ["category", "department", "instructor"] as const) {
     const value = one(query[key]);
     if (value) {
       if (!isObjectId(value)) return { error: `Invalid ${key}` };
@@ -75,7 +93,10 @@ export const parseCourseSearch = (
 
   const duration = one(query.duration);
   if (duration) {
-    if (!(duration in DURATION_BUCKETS)) return { error: "Duration must be short, medium or long" };
+    // own keys only: `"toString" in {}` is true, so `in` alone would let it through
+    if (!Object.prototype.hasOwnProperty.call(DURATION_BUCKETS, duration)) {
+      return { error: "Duration must be short, medium or long" };
+    }
     params.duration = duration as DurationBucket;
   }
 
@@ -114,6 +135,7 @@ export const parseCourseSearch = (
 export const buildMongoFilter = (p: ICourseSearchParams): Record<string, any> => {
   const filter: Record<string, any> = { status: "Published" };
   if (p.category) filter.category = p.category;
+  if (p.department) filter.department = p.department;
   if (p.instructor) filter.instructor = p.instructor;
   if (p.level) filter.level = p.level;
   if (p.enrollment) filter.enrollmentMode = p.enrollment;
@@ -136,9 +158,13 @@ export interface ISearchRow {
 
 export const matchesDuration = (minutes: number, bucket?: DurationBucket) => {
   if (!bucket) return true;
+  // A course with no known length (no hours given, no lesson minutes) is in no
+  // bucket - "unknown" is not the same as "short".
+  if (!(minutes > 0)) return false;
   const { min, max } = DURATION_BUCKETS[bucket];
-  // lower bound inclusive, upper exclusive, so a 120-minute course is "medium", not in two buckets
-  return minutes >= min && minutes < max;
+  // upper bound inclusive, lower exclusive, to match the labels: exactly 2 hours
+  // is "Up to 2 hours" and exactly 10 hours is "2 to 10 hours" - never two buckets
+  return minutes > min && minutes <= max;
 };
 
 const time = (v?: Date | string) => (v ? +new Date(v) : 0);
