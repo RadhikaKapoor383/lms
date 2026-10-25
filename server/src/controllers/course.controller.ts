@@ -13,6 +13,7 @@ import CourseModel, {
   ICourse,
 } from "../models/course.model";
 import CategoryModel from "../models/category.model";
+import DepartmentModel from "../models/department.model";
 import userModel from "../models/user.model";
 import EnrollmentModel from "../models/enrollment.model";
 import LessonProgressModel from "../models/lessonProgress.model";
@@ -28,6 +29,8 @@ import NotificationModel from "../models/notification.model";
 import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
 import { toPublicCourse } from "../utils/publicProfile";
 import { pickCourseFields } from "../services/courseFields.service";
+import { departmentForNewCourse } from "../services/department.service";
+import { effectiveDurationMinutes } from "../services/courseSearch.service";
 import { removeCourseMaterials } from "./material.controller";
 import { getSettings } from "../services/settings.service";
 import { redis } from "../utils/redis";
@@ -46,6 +49,11 @@ const isValidInstructorId = async (id: any): Promise<boolean> => {
 const isValidCategoryId = async (id: any): Promise<boolean> => {
   if (!mongoose.Types.ObjectId.isValid(id)) return false;
   return !!(await CategoryModel.exists({ _id: id }));
+};
+
+const isValidDepartmentId = async (id: any): Promise<boolean> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) return false;
+  return !!(await DepartmentModel.exists({ _id: id }));
 };
 
 // Enrollment settings coming from the form: mode + optional plain-text code.
@@ -98,6 +106,23 @@ export const uploadCourse = CatchAsyncError(
 
       if (!(await isValidCategoryId(data.category))) {
         return next(new ErrorHandler("Choose a valid category", 400));
+      }
+
+      // An instructor who leaves the department empty gets their own one. Read
+      // from the database, not req.user: the session copy may predate an
+      // admin moving them to another department.
+      const own =
+        req.user?.role === "instructor"
+          ? await userModel.findById(req.user._id).select("department").lean()
+          : null;
+      const department = departmentForNewCourse(data.department, req.user?.role, own?.department as any);
+      if (department) {
+        if (!(await isValidDepartmentId(department))) {
+          return next(new ErrorHandler("Choose a valid department", 400));
+        }
+        data.department = department;
+      } else {
+        delete data.department;
       }
 
       const settingsError = await prepareEnrollmentSettings(data);
@@ -159,6 +184,17 @@ export const editCourse = CatchAsyncError(
         return next(new ErrorHandler("Choose a valid category", 400));
       }
 
+      // department: an id moves the course, null takes it out of its department
+      const unset: Record<string, 1> = {};
+      if ("department" in data) {
+        if (data.department === null) {
+          delete data.department;
+          unset.department = 1;
+        } else if (!(await isValidDepartmentId(data.department))) {
+          return next(new ErrorHandler("Choose a valid department", 400));
+        }
+      }
+
       const settingsError = await prepareEnrollmentSettings(data);
       if (settingsError) {
         return next(new ErrorHandler(settingsError, 400));
@@ -185,7 +221,7 @@ export const editCourse = CatchAsyncError(
       const courseId = req.params.id;
       const course = await CourseModel.findByIdAndUpdate(
         courseId,
-        { $set: data },
+        Object.keys(unset).length ? { $set: data, $unset: unset } : { $set: data },
         { new: true, runValidators: true }
       );
 
@@ -233,6 +269,7 @@ export const getCourseForEdit = CatchAsyncError(
     try {
       const course = await CourseModel.findById(req.params.id)
         .populate("category", "name")
+        .populate("department", "name")
         .populate("instructor", "name email");
 
       if (!course) {
@@ -266,13 +303,24 @@ export const getSingleCourse = CatchAsyncError(
       const found = await CourseModel.findOne({
         _id: courseId,
         status: "Published",
-      }).populate("category", "name");
+      })
+        .populate("category", "name")
+        .populate("department", "name");
 
       if (!found) {
         return next(new ErrorHandler("Course not found", 404));
       }
 
-      const course = toPublicCourse(found);
+      // Length for the course page: the instructor's hours if they gave any,
+      // otherwise the lessons' video minutes added up (same rule as search).
+      const [lessonTotal] = await LessonModel.aggregate([
+        { $match: { course: found._id } },
+        { $group: { _id: null, minutes: { $sum: { $ifNull: ["$videoLength", 0] } } } },
+      ]);
+      const course = {
+        ...toPublicCourse(found),
+        durationMinutes: effectiveDurationMinutes(found.durationHours, lessonTotal?.minutes || 0),
+      };
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7 days
 
       res.status(200).json({ success: true, course });
@@ -294,10 +342,9 @@ export const getAllCourses = CatchAsyncError(
         return res.status(200).json({ success: true, courses });
       }
 
-      const found = await CourseModel.find({ status: "Published" }).populate(
-        "category",
-        "name"
-      );
+      const found = await CourseModel.find({ status: "Published" })
+        .populate("category", "name")
+        .populate("department", "name");
       const courses = found.map(toPublicCourse);
 
       await redis.set("allCourses", JSON.stringify(courses), "EX", 604800); // 7 days
@@ -551,6 +598,7 @@ export const getAdminAllCourses = CatchAsyncError(
       const courses = await CourseModel.find(filter)
         .populate("instructor", "name email")
         .populate("category", "name")
+        .populate("department", "name")
         .sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
     } catch (error: any) {
@@ -568,6 +616,7 @@ export const getInstructorCourses = CatchAsyncError(
         instructor: req.user?._id,
       })
         .populate("category", "name")
+        .populate("department", "name")
         .sort({ createdAt: -1 });
       res.status(200).json({ success: true, courses });
     } catch (error: any) {

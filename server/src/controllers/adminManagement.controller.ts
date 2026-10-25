@@ -24,6 +24,9 @@ import {
 
 const IN_COURSE = ["active", "completed"]; // enrollment statuses still in the course
 
+// A populated department as { _id, name }, or null when there is none.
+const publicDepartment = (d: any) => (d && d._id ? { _id: d._id, name: d.name } : null);
+
 // ------------------- Activate / deactivate an account -------------------
 // Deactivating signs the person out of every device at once (their session in
 // Redis is deleted) and the login route refuses them until reactivated.
@@ -142,7 +145,10 @@ export const setUserApproval = CatchAsyncError(
 export const getInstructors = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const instructors = await userModel.find({ role: "instructor" }).sort({ name: 1 });
+      const instructors = await userModel
+        .find({ role: "instructor" })
+        .populate("department", "name")
+        .sort({ name: 1 });
       const ids = instructors.map((i) => i._id);
 
       const courses = await CourseModel.find({ instructor: { $in: ids } })
@@ -169,6 +175,7 @@ export const getInstructors = CatchAsyncError(
             avatar: i.avatar,
             isActive: i.isActive !== false,
             createdAt: i.createdAt,
+            department: publicDepartment(i.department),
             ...stats,
           };
         }),
@@ -189,7 +196,9 @@ export const getInstructorDetail = CatchAsyncError(
         return next(new ErrorHandler("Invalid instructor id", 400));
       }
 
-      const instructor = await userModel.findOne({ _id: id, role: "instructor" });
+      const instructor = await userModel
+        .findOne({ _id: id, role: "instructor" })
+        .populate("department", "name");
       if (!instructor) {
         return next(new ErrorHandler("Instructor not found", 404));
       }
@@ -232,6 +241,7 @@ export const getInstructorDetail = CatchAsyncError(
           avatar: instructor.avatar,
           isActive: instructor.isActive !== false,
           createdAt: instructor.createdAt,
+          department: publicDepartment(instructor.department),
         },
         summary,
         engagement: {
