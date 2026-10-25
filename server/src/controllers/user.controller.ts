@@ -16,6 +16,7 @@ import {
   buildAuthTokens,
   describeSession,
   sendToken,
+  tokenLifetimes,
 } from "../utils/jwt";
 import {
   endSession,
@@ -23,6 +24,7 @@ import {
   isPastMax,
   sessionEndedError,
   touchSession,
+  useRefreshToken,
 } from "../utils/session";
 import { redis } from "../utils/redis";
 import { logActivity } from "../utils/auditLog";
@@ -433,10 +435,26 @@ export const updateAccessToken = CatchAsyncError(
       // here so the re-save below cleans the session up.
       delete user.password;
 
+      // Rotation: this refresh token can be used once. A token that was already
+      // used (copied by someone) ends the whole login. Tokens from before
+      // rotation existed have no jti and are accepted once.
+      const used = await useRefreshToken(
+        decoded.sid,
+        typeof decoded.jti === "string" ? decoded.jti : "",
+        tokenLifetimes(decoded.loginAt).refreshSeconds
+      );
+      if (used.action === "reuse") {
+        await endSession(decoded.sid);
+        res.cookie("access_token", "", { maxAge: 1 });
+        res.cookie("refresh_token", "", { maxAge: 1 });
+        return next(sessionEndedError("reused"));
+      }
+
       const { accessToken, refreshToken, accessOptions, refreshOptions } = buildAuthTokens(
         String(user._id),
         decoded.sid,
-        decoded.loginAt
+        decoded.loginAt,
+        used.jti
       );
 
       req.user = user;

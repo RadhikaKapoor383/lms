@@ -222,6 +222,48 @@ export const downloadMaterial = CatchAsyncError(
   }
 );
 
+// ------------------- Instructor / admin: attach to a lesson (or detach) -------------------
+// Body: { lessonId } - a lesson of this course, or null/"" for the whole course.
+
+export const setMaterialLesson = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: courseId, materialId } = req.params;
+      if (!isObjectId(courseId) || !isObjectId(materialId)) {
+        return next(new ErrorHandler("Invalid id", 400));
+      }
+      const lessonId = req.body?.lessonId;
+      let update: Record<string, any>;
+      if (lessonId === null || lessonId === undefined || lessonId === "") {
+        update = { $unset: { lesson: 1 } };
+      } else {
+        if (!isObjectId(lessonId) || !(await LessonModel.exists({ _id: lessonId, course: courseId }))) {
+          return next(new ErrorHandler("That lesson does not belong to this course", 400));
+        }
+        update = { $set: { lesson: lessonId } };
+      }
+
+      // course in the filter: a material of another course is a 404
+      const material = await CourseMaterialModel.findOneAndUpdate({ _id: materialId, course: courseId }, update, {
+        new: true,
+      });
+      if (!material) {
+        return next(new ErrorHandler("Material not found", 404));
+      }
+
+      logActivity(req, "material.lesson", `Moved material "${material.title}"`, {
+        courseId,
+        materialId,
+        lessonId: material.lesson || null,
+      });
+
+      res.status(200).json({ success: true, material: toPublicMaterial(material) });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
 // ------------------- Instructor / admin: delete -------------------
 
 export const deleteMaterial = CatchAsyncError(
