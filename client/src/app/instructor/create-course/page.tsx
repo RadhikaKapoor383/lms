@@ -36,6 +36,7 @@ export default function InstructorCreateCoursePage() {
           isSubmitting={isLoading}
           submitLabel="Save draft"
           showStatus={false}
+          departmentHint="Leave as “No department” to use your own department."
         />
       </div>
     </div>

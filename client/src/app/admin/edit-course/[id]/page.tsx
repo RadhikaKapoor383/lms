@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import Loader from "@/components/Loader";
 import CourseForm, { CourseFormValues } from "@/components/CourseForm";
+import { departmentId } from "@/utils/courseMeta";
 import {
   useEditCourseMutation,
   useGetCourseForEditQuery,
@@ -54,6 +55,7 @@ export default function EditCoursePage() {
           initialValues={{
             ...course,
             category: course.category?._id || course.category || "",
+            department: departmentId(course.department),
             thumbnail: course.thumbnail?.url || "",
           }}
           onSubmit={handleSubmit}
