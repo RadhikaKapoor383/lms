@@ -42,6 +42,8 @@ export interface ICourse extends Document {
   // Optional so a course created before this field existed stays valid until
   // the category migration (or an admin edit) fills it in.
   category?: mongoose.Types.ObjectId;
+  // Optional: the department this course belongs to (see department.model.ts).
+  department?: mongoose.Types.ObjectId | null;
   level: string;
   durationHours?: number;
   demoUrl: string;
@@ -94,6 +96,7 @@ const courseSchema = new Schema<ICourse>(
       url: { type: String },
     },
     category: { type: Schema.Types.ObjectId, ref: "Category", index: true },
+    department: { type: Schema.Types.ObjectId, ref: "Department", index: true },
     level: { type: String, required: true },
     // Total learning time in hours (shown on the course page and cards).
     durationHours: { type: Number, min: 0, max: 10000 },
