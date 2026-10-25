@@ -1,3 +1,5 @@
+import { readDepartmentInput } from "./department.service";
+
 // Without a whitelist, an instructor could publish their own course (skipping
 // admin approval), hand a course to someone else, or fake ratings and
 // enrollment counts by sending extra fields in the request body.
@@ -12,6 +14,7 @@ const COURSE_EDITABLE_FIELDS = [
   "estimatedPrice",
   "thumbnail",
   "category",
+  "department",
   "level",
   "demoUrl",
   "benefits",
@@ -38,6 +41,10 @@ export const pickCourseFields = (
   // an empty duration box means "not set"
   if (picked.durationHours === "" || picked.durationHours === null) {
     delete picked.durationHours;
+  }
+  // an empty department select means "no department" (stored as null)
+  if ("department" in picked) {
+    picked.department = readDepartmentInput(picked.department) ?? null;
   }
   return picked;
 };
