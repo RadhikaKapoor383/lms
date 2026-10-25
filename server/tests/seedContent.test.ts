@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { validateQuestion } from "../src/services/quizGrading.service";
 import {
-  CATEGORIES, COURSES, INSTRUCTORS, INSTRUCTOR_EMAIL_DOMAIN, QUESTION_BANKS, STUDENT_EMAIL_DOMAIN,
+  CATEGORIES, COURSES, DEPARTMENTS, INSTRUCTORS, INSTRUCTOR_EMAIL_DOMAIN, QUESTION_BANKS, STUDENT_EMAIL_DOMAIN,
+  courseDepartment,
 } from "../src/seedData/statsContent";
+import { DURATION_OPTIONS, matchesDuration } from "../src/services/courseSearch.service";
 
 // The sample-data script (npm run seed:stats) writes straight into the database,
 // so nothing checks its content on the way in. These tests do, using the app's own rules.
@@ -55,5 +57,32 @@ describe("sample data content", () => {
   it("seeded e-mail addresses use reserved .example domains, so they can never reach a real inbox", () => {
     expect(STUDENT_EMAIL_DOMAIN).toMatch(/\.example$/);
     expect(INSTRUCTOR_EMAIL_DOMAIN).toMatch(/\.example$/);
+  });
+
+  it("every instructor and course is in a real department, and the filters have something to show", () => {
+    expect(new Set(DEPARTMENTS).size).toBe(DEPARTMENTS.length);
+    for (const i of INSTRUCTORS) expect(DEPARTMENTS, i.name).toContain(i.department);
+    const published = COURSES.filter((c) => c.status === "Published");
+    for (const c of COURSES) {
+      const d = courseDepartment(c);
+      if (d !== null) expect(DEPARTMENTS, c.name).toContain(d);
+    }
+    // every department has at least one published course
+    for (const d of DEPARTMENTS) {
+      expect(published.some((c) => courseDepartment(c) === d), d).toBe(true);
+    }
+    // the edge cases the UI must handle: a course outside its instructor's
+    // department, and a published course with no department at all
+    expect(COURSES.some((c) => c.department && c.department !== INSTRUCTORS[c.instructor].department)).toBe(true);
+    expect(published.some((c) => courseDepartment(c) === null)).toBe(true);
+  });
+
+  it("published courses land in more than one duration bucket", () => {
+    const buckets = new Set(
+      COURSES.filter((c) => c.status === "Published").flatMap((c) =>
+        DURATION_OPTIONS.filter((o) => matchesDuration(c.durationHours * 60, o.value)).map((o) => o.value)
+      )
+    );
+    expect(buckets.size).toBeGreaterThanOrEqual(2);
   });
 });
