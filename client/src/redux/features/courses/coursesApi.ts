@@ -119,7 +119,7 @@ export const coursesApi = apiSlice.injectEndpoints({
         body: data,
         credentials: "include",
       }),
-      invalidatesTags: ["Courses"],
+      invalidatesTags: ["Courses", "Departments"], // department course counts
     }),
 
     editCourse: builder.mutation({
@@ -129,7 +129,7 @@ export const coursesApi = apiSlice.injectEndpoints({
         body: data,
         credentials: "include",
       }),
-      invalidatesTags: ["Courses"],
+      invalidatesTags: ["Courses", "Departments"], // department course counts
     }),
 
     deleteCourseAdmin: builder.mutation({
@@ -138,7 +138,7 @@ export const coursesApi = apiSlice.injectEndpoints({
         method: "DELETE",
         credentials: "include",
       }),
-      invalidatesTags: ["Courses"],
+      invalidatesTags: ["Courses", "Departments"], // department course counts
     }),
   }),
 });
