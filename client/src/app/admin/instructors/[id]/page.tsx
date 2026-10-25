@@ -45,7 +45,8 @@ export default function AdminInstructorDetailPage() {
               )}
             </h1>
             <p className="text-ink/60 dark:text-parchment/60">
-              {instructor.email} · joined {new Date(instructor.createdAt).toLocaleDateString()}
+              {instructor.email} · joined {new Date(instructor.createdAt).toLocaleDateString()} ·{" "}
+              {instructor.department?.name ? `${instructor.department.name} department` : "no department"}
             </p>
           </div>
 
