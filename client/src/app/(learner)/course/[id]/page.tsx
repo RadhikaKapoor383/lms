@@ -11,6 +11,7 @@ import {
   useEnrollWithCodeMutation,
 } from "@/redux/features/enrollment/enrollmentApi";
 import { useAppSelector } from "@/hooks/redux";
+import { courseDuration, departmentName } from "@/utils/courseMeta";
 
 export default function CourseDetailsPage() {
   const params = useParams();
@@ -151,9 +152,13 @@ export default function CourseDetailsPage() {
         {course && (
           <>
             <p className="text-sm uppercase tracking-wide text-clay">
-              {course.category?.name} · {course.level}
-              {course.durationHours ? ` · ${course.durationHours} hours` : ""}
+              {[course.category?.name, course.level, courseDuration(course)].filter(Boolean).join(" · ")}
             </p>
+            {departmentName(course) && (
+              <p className="mt-1 text-sm text-ink/60 dark:text-parchment/60">
+                Department: {departmentName(course)}
+              </p>
+            )}
             <h1 className="mt-3 font-display text-4xl text-ink dark:text-parchment">
               {course.name}
             </h1>
