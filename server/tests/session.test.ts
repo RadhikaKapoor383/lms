@@ -7,13 +7,13 @@ vi.mock("../src/utils/redis", () => ({
     set: async (k: string, v: string, _ex: string, ttl: number) => { store.set(k, { value: v, ttl }); return "OK"; },
     get: async (k: string) => store.get(k)?.value ?? null,
     expire: async (k: string, ttl: number) => { const e = store.get(k); if (e) e.ttl = ttl; return e ? 1 : 0; },
-    del: async (k: string) => (store.delete(k) ? 1 : 0),
+    del: async (...keys: string[]) => keys.filter((k) => store.delete(k)).length,
   },
 }));
 
 import {
-  describeDuration, endSession, getSessionLimits, isPastMax, secondsUntilMax,
-  sessionEndedError, startSession, touchSession,
+  REFRESH_GRACE_SECONDS, decideRefresh, describeDuration, endSession, getSessionLimits, isPastMax,
+  secondsUntilMax, sessionEndedError, startRefreshChain, startSession, touchSession,
 } from "../src/utils/session";
 
 beforeEach(() => store.clear());
@@ -86,5 +86,48 @@ describe("sessions in Redis", () => {
     await endSession(a.sid);
     expect(await touchSession(a.sid, "u1")).toBe(false);
     expect(await touchSession(b.sid, "u1")).toBe(true);
+  });
+});
+
+describe("refresh-token rotation", () => {
+  const state = { cur: "B", prev: "A", prevUntil: 1000 };
+
+  it("the current token rotates to a new id and remembers the old one briefly", () => {
+    expect(decideRefresh(state, "B", "C", 990)).toEqual({
+      action: "rotate",
+      jti: "C",
+      next: { cur: "C", prev: "B", prevUntil: 990 + REFRESH_GRACE_SECONDS },
+    });
+  });
+  it("the previous token, within the grace seconds, gets the current id (two tabs at once)", () => {
+    expect(decideRefresh(state, "A", "X", 1000)).toEqual({ action: "grace", jti: "B" });
+  });
+  it("the previous token after the grace, or any older token, is reuse", () => {
+    expect(decideRefresh(state, "A", "X", 1001)).toEqual({ action: "reuse" });
+    expect(decideRefresh(state, "Z", "X", 990)).toEqual({ action: "reuse" });
+    expect(decideRefresh(state, "", "X", 990)).toEqual({ action: "reuse" });
+  });
+  it("with no record (older login, or Redis lost it) the token is accepted once", () => {
+    expect(decideRefresh(null, "", "N", 5).action).toBe("rotate");
+    // ...and a second tab sending the same pre-rotation token right then gets the grace too
+    expect(decideRefresh({ cur: "N", prev: "", prevUntil: 25 }, "", "M", 10)).toEqual({ action: "grace", jti: "N" });
+  });
+  it("on a fresh chain an empty id never matches", () => {
+    expect(decideRefresh({ cur: "J1", prev: "", prevUntil: 0 }, "", "M", 0)).toEqual({ action: "reuse" });
+  });
+  it("a new login starts a chain with only its first id", async () => {
+    await startRefreshChain("s1", "J1", 3600);
+    expect(store.get("rt:s1")).toEqual({ value: JSON.stringify({ cur: "J1", prev: "", prevUntil: 0 }), ttl: 3600 });
+  });
+  it("ending a login also forgets its refresh chain", async () => {
+    const { sid } = await startSession("u1");
+    await startRefreshChain(sid, "J1", 60);
+    await endSession(sid);
+    expect(store.has(`sess:${sid}`)).toBe(false);
+    expect(store.has(`rt:${sid}`)).toBe(false);
+  });
+  it("a replayed token gets its own 401 code so the website can explain it", () => {
+    const e = sessionEndedError("reused");
+    expect([e.statusCode, e.code]).toEqual([401, "SESSION_REVOKED"]);
   });
 });
