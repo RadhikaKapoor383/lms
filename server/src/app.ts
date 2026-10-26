@@ -18,6 +18,8 @@ import auditLogRouter from "./routes/auditLog.route";
 import enrollmentRouter from "./routes/enrollment.route";
 import categoryRouter from "./routes/category.route";
 import departmentRouter from "./routes/department.route";
+import permissionsRouter from "./routes/permissions.route";
+import videoRouter from "./routes/video.route";
 import assignmentRouter from "./routes/assignment.route";
 import quizRouter from "./routes/quiz.route";
 import certificateRouter from "./routes/certificate.route";
@@ -87,6 +89,8 @@ app.use(
   enrollmentRouter,
   categoryRouter,
   departmentRouter,
+  permissionsRouter,
+  videoRouter,
   assignmentRouter,
   quizRouter,
   certificateRouter,

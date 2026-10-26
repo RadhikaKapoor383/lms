@@ -81,9 +81,14 @@ const migrate = async () => {
             videoPlayer: item.videoPlayer,
             links: item.links || [],
             suggestion: item.suggestion,
-            questions: item.questions || [],
             order: lessonOrder++,
           });
+          // Lessons no longer hold Q&A. Keep any old questions on the lesson
+          // (written raw, outside the model) so that
+          // `npm run migrate:lesson-questions` can move them into Discussions.
+          if (Array.isArray(item.questions) && item.questions.length) {
+            await mongoose.connection.collection("lessons").updateOne({ _id: item._id }, { $set: { questions: item.questions } });
+          }
           lessonsCreated++;
         }
       }
@@ -102,6 +107,7 @@ const migrate = async () => {
     `\nCourses migrated: ${coursesMigrated}, skipped (already done or empty): ${coursesSkipped}, failed: ${coursesFailed}.`
   );
   console.log(`Modules created: ${modulesCreated}. Lessons created: ${lessonsCreated}.`);
+  console.log("If lessons had questions, move them into Discussions with: npm run migrate:lesson-questions");
 
   await mongoose.disconnect();
   await redis.quit();

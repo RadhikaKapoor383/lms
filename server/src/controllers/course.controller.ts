@@ -2,8 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import cloudinary from "cloudinary";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
-import ejs from "ejs";
-import path from "path";
 
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
@@ -26,15 +24,15 @@ import QuizAttemptModel from "../models/quizAttempt.model";
 import { syncModulesAndLessons, buildCourseDataArray } from "../services/courseContent.service";
 import { hasCourseContentAccess, isObjectId } from "../services/enrollment.service";
 import NotificationModel from "../models/notification.model";
-import { notifyCourseStudents, notifyUser, notifyUsers } from "../services/notification.service";
+import { notifyCourseStudents } from "../services/notification.service";
 import { toPublicCourse } from "../utils/publicProfile";
 import { pickCourseFields } from "../services/courseFields.service";
 import { departmentForNewCourse } from "../services/department.service";
 import { effectiveDurationMinutes } from "../services/courseSearch.service";
 import { removeCourseMaterials } from "./material.controller";
+import { removeLessonVideos } from "../services/videoStorage.service";
 import { getSettings } from "../services/settings.service";
 import { redis } from "../utils/redis";
-import sendMail from "../utils/sendMail";
 import { logActivity } from "../utils/auditLog";
 
 // ------------------- Role helpers -------------------
@@ -393,157 +391,8 @@ export const getCourseByUser = CatchAsyncError(
   }
 );
 
-// ------------------- Add question -------------------
-
-interface IAddQuestionData {
-  question: string;
-  courseId: string;
-  contentId: string;
-}
-
-export const addQuestion = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { question, courseId, contentId } =
-        req.body as IAddQuestionData;
-
-      if (!mongoose.Types.ObjectId.isValid(contentId)) {
-        return next(new ErrorHandler("Invalid content id", 400));
-      }
-
-      const allowed = await hasCourseContentAccess(req.user?.role, String(req.user?._id), courseId);
-      if (!allowed) {
-        return next(
-          new ErrorHandler("You are not eligible to access this course", 404)
-        );
-      }
-
-      const lesson = await LessonModel.findOne({ _id: contentId, course: courseId });
-
-      if (!lesson) {
-        return next(new ErrorHandler("Invalid content id", 400));
-      }
-
-      const newQuestion: any = {
-        user: req.user,
-        question,
-        questionReplies: [],
-      };
-
-      lesson.questions.push(newQuestion);
-      await lesson.save();
-
-      // Tell the course staff - not the person who just asked (this used to
-      // notify the asker about their own question).
-      const askedIn = await CourseModel.findById(courseId).select("instructor");
-      let staffIds: string[];
-      if (askedIn?.instructor) {
-        staffIds = [String(askedIn.instructor)];
-      } else {
-        staffIds = (await userModel.find({ role: "admin" }).select("_id")).map((a) => String(a._id));
-      }
-      await notifyUsers(
-        staffIds.filter((id) => id !== String(req.user?._id)),
-        "New question received",
-        `${req.user?.name} asked a question in ${lesson.title}`,
-        `/course-access/${courseId}`
-      );
-
-      res.status(200).json({ success: true });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }
-);
-
-// ------------------- Add answer -------------------
-
-interface IAddAnswerData {
-  answer: string;
-  courseId: string;
-  contentId: string;
-  questionId: string;
-}
-
-export const addAnswer = CatchAsyncError(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { answer, courseId, contentId, questionId } =
-        req.body as IAddAnswerData;
-
-      if (!mongoose.Types.ObjectId.isValid(contentId)) {
-        return next(new ErrorHandler("Invalid content id", 400));
-      }
-
-      // Until now ANY logged-in user could answer questions in ANY course.
-      const allowed = await hasCourseContentAccess(req.user?.role, String(req.user?._id), courseId);
-      if (!allowed) {
-        return next(
-          new ErrorHandler("You are not eligible to access this course", 404)
-        );
-      }
-
-      const lesson = await LessonModel.findOne({ _id: contentId, course: courseId });
-
-      if (!lesson) {
-        return next(new ErrorHandler("Invalid content id", 400));
-      }
-
-      const question = lesson.questions.find((item: any) =>
-        item._id.equals(questionId)
-      );
-
-      if (!question) {
-        return next(new ErrorHandler("Invalid question id", 400));
-      }
-
-      const newAnswer: any = { user: req.user, answer };
-      question.questionReplies.push(newAnswer);
-
-      await lesson.save();
-
-      const asker = question.user as any;
-      const link = `/course-access/${courseId}`;
-
-      if (String(req.user?._id) === String(asker._id)) {
-        // the asker is following up on their own question: the staff should know
-        const owner = await CourseModel.findById(courseId).select("instructor");
-        if (owner?.instructor) {
-          await notifyUser(
-            String(owner.instructor),
-            "New question reply received",
-            `${req.user?.name} replied on their question in ${lesson.title}`,
-            link
-          );
-        }
-      } else {
-        // someone else answered: tell the asker in the app, and by email
-        await notifyUser(
-          String(asker._id),
-          "Your question was answered",
-          `${req.user?.name} replied to your question in ${lesson.title}`,
-          link
-        );
-
-        // The answer is already saved - a mail failure must not turn that into an error.
-        try {
-          await sendMail({
-            email: asker.email,
-            subject: "Question Reply",
-            template: "question-reply.ejs",
-            data: { name: asker.name, title: lesson.title },
-          });
-        } catch (error: any) {
-          console.error("Question reply email failed:", error.message);
-        }
-      }
-
-      res.status(200).json({ success: true });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 500));
-    }
-  }
-);
+// (The old per-lesson "Ask a question" Q&A was replaced by Discussions -
+// threads can be about a lesson. See migrate-lesson-questions.ts.)
 
 // ------------------- Delete course (admin) -------------------
 
@@ -562,6 +411,7 @@ export const deleteCourse = CatchAsyncError(
       // Clean up everything that pointed at this course
       await EnrollmentModel.deleteMany({ course: id });
       await LessonProgressModel.deleteMany({ course: id });
+      await removeLessonVideos({ course: id });
       await LessonModel.deleteMany({ course: id });
       await AssignmentModel.deleteMany({ course: id });
       await AssignmentSubmissionModel.deleteMany({ course: id });

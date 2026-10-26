@@ -55,6 +55,15 @@ export interface ICourse extends Document {
   status: "Draft" | "Pending Approval" | "Published" | "Rejected" | "Archived";
   enrollmentMode: EnrollmentMode;
   enrollmentCodeHash?: string; // bcrypt hash - never sent to the client
+  // What a student must do to complete the course (see completionRules.service.ts).
+  // Missing on older courses = the defaults.
+  completionRules?: {
+    lessonPercent: number;
+    quizzes: "all" | "none" | "selected";
+    quizIds: mongoose.Types.ObjectId[];
+    assignments: "none" | "submitted" | "passed";
+    assignmentPassPercent: number;
+  };
 }
 
 export const COURSE_STATUSES = [
@@ -118,6 +127,18 @@ const courseSchema = new Schema<ICourse>(
     },
     // select:false = excluded from every query unless explicitly asked for
     enrollmentCodeHash: { type: String, select: false },
+    completionRules: {
+      type: new Schema(
+        {
+          lessonPercent: { type: Number, min: 1, max: 100, default: 100 },
+          quizzes: { type: String, enum: ["all", "none", "selected"], default: "all" },
+          quizIds: [{ type: Schema.Types.ObjectId, ref: "Quiz" }],
+          assignments: { type: String, enum: ["none", "submitted", "passed"], default: "none" },
+          assignmentPassPercent: { type: Number, min: 1, max: 100, default: 50 },
+        },
+        { _id: false }
+      ),
+    },
   },
   { timestamps: true }
 );

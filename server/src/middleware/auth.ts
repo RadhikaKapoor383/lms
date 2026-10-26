@@ -7,6 +7,8 @@ import mongoose from "mongoose";
 import CourseModel from "../models/course.model";
 import AssignmentModel from "../models/assignment.model";
 import QuizModel from "../models/quiz.model";
+import { getPermission, isAllowed } from "../services/permissions.service";
+import { loadDeniedPermissions } from "../services/rolePermissionsStore.service";
 import {
   endSession,
   getSessionLimits,
@@ -80,6 +82,29 @@ export const authorizeRoles = (...roles: string[]) => {
     }
     next();
   };
+};
+
+// Role permissions an admin can switch off (see services/permissions.service.ts).
+// Use AFTER isAuthenticated. Admins always pass; a permission of another role
+// doesn't apply to this user. The key is checked when the route is defined,
+// so a typo fails at startup instead of silently allowing everything.
+export const requirePermission = (key: string) => {
+  const permission = getPermission(key);
+  if (!permission) throw new Error(`requirePermission: unknown permission "${key}"`);
+  return CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const role = req.user?.role;
+    if (role === "admin" || role !== permission.role) return next();
+    if (!isAllowed(role, key, await loadDeniedPermissions())) {
+      return next(
+        new ErrorHandler(
+          `On this platform ${role}s are not allowed to ${permission.label}. Ask an admin if you need this.`,
+          403,
+          "PERMISSION_DENIED"
+        )
+      );
+    }
+    next();
+  });
 };
 
 // Layer 3: ownership. Roles say *what kind* of user you are; this says whether
