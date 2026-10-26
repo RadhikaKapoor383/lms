@@ -1,12 +1,10 @@
-// Anything stored with a user snapshot (reviews, lesson questions) used to keep
-// the WHOLE logged-in user object - email, role, course list and all - and send
-// it back to whoever fetched the course. These helpers cut a user, a review, or
-// a question down to what other people are allowed to see: who wrote it.
+// Anything stored with a user snapshot (reviews) used to keep the WHOLE
+// logged-in user object - email, role, course list and all - and send it back
+// to whoever fetched the course. These helpers cut a user or a review down to
+// what other people are allowed to see: who wrote it.
 //
 // They are applied when RESPONDING, not when saving, so they also clean up data
-// that was stored before this fix, with no migration. (Lesson questions keep
-// the email in the database on purpose: the "your question was answered" email
-// needs it. It just never leaves the server.)
+// that was stored before this fix, with no migration.
 
 export const toPublicUser = (u: any) =>
   u
@@ -23,19 +21,6 @@ export const toPublicReview = (r: any) => ({
     user: toPublicUser(c.user),
     comment: c.comment,
     createdAt: c.createdAt,
-  })),
-});
-
-export const toPublicQuestion = (q: any) => ({
-  _id: q._id,
-  user: toPublicUser(q.user),
-  question: q.question,
-  createdAt: q.createdAt,
-  questionReplies: (q.questionReplies || []).map((a: any) => ({
-    _id: a._id,
-    user: toPublicUser(a.user),
-    answer: a.answer,
-    createdAt: a.createdAt,
   })),
 });
 

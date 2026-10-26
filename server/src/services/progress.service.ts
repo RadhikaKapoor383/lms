@@ -120,9 +120,10 @@ export const setLessonCompleted = async (
   }
   await enrollment.save();
 
-  // Lessons are all done - the student may now qualify for a certificate
-  // (it also checks that every quiz is passed, so this is safe to call).
-  if (enrollment.status === "completed") {
+  // The student may now qualify for a certificate. The course's completion
+  // rules may need fewer than all lessons, so this runs after every change;
+  // it checks everything itself and does nothing if they don't qualify yet.
+  if (percentage > 0) {
     await tryIssueCertificate(studentId, courseId);
   }
 
