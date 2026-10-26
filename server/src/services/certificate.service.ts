@@ -7,17 +7,21 @@ import QuizAttemptModel from "../models/quizAttempt.model";
 import NotificationModel from "../models/notification.model";
 import userModel from "../models/user.model";
 import { getSettings } from "./settings.service";
+import AssignmentModel from "../models/assignment.model";
+import AssignmentSubmissionModel from "../models/assignmentSubmission.model";
+import { DEFAULT_COMPLETION_RULES, ICompletionRules, describeRules, withDefaults } from "./completionRules.service";
 
 
 // ---------------------------------------------------------------------------
 // 1. The rule (pure - no database, so it can be tested on its own)
 // ---------------------------------------------------------------------------
-// A student earns the certificate when BOTH are true:
+// What counts as "completed" is set per course (see completionRules.service.ts).
+// The defaults are the platform's original rule:
 //   a) every lesson is complete (completionPercentage reached 100), and
-//   b) every quiz in the course has been passed at least once.
-// A course with no lessons can never be "complete", so it never qualifies.
-// Assignments are not required: they are graded by hand and can take days,
-// and a late grade should not block a student who finished everything else.
+//   b) every quiz in the course has been passed at least once,
+//   c) assignments are not required (they are graded by hand and can take days).
+// A course with no lessons can never be "complete" (its percentage is 0 and
+// the lesson share is at least 1%), so it never qualifies.
 
 export interface IQuizPassState {
   quizId: string;
@@ -25,27 +29,68 @@ export interface IQuizPassState {
   passed: boolean;
 }
 
+export interface IAssignmentState {
+  assignmentId: string;
+  title: string;
+  submitted: boolean;
+  scorePercent: number | null; // null = not graded (yet)
+}
+
+export interface IPendingAssignment {
+  assignmentId: string;
+  title: string;
+  reason: "not submitted" | "not graded yet" | "below the pass mark";
+}
+
 export interface IEligibility {
   eligible: boolean;
   lessonsComplete: boolean;
   completionPercentage: number;
+  requiredLessonPercent: number;
   pendingQuizzes: { quizId: string; title: string }[];
+  pendingAssignments: IPendingAssignment[];
 }
 
 export const computeEligibility = (
   completionPercentage: number,
-  quizzes: IQuizPassState[]
+  quizzes: IQuizPassState[],
+  rules: ICompletionRules = DEFAULT_COMPLETION_RULES,
+  assignments: IAssignmentState[] = []
 ): IEligibility => {
-  const lessonsComplete = completionPercentage >= 100;
-  const pendingQuizzes = quizzes
+  const lessonsComplete = completionPercentage >= rules.lessonPercent;
+
+  const required =
+    rules.quizzes === "none"
+      ? []
+      : rules.quizzes === "selected"
+        ? quizzes.filter((q) => rules.quizIds.includes(q.quizId)) // a deleted quiz simply drops out
+        : quizzes;
+  const pendingQuizzes = required
     .filter((q) => !q.passed)
     .map((q) => ({ quizId: q.quizId, title: q.title }));
 
+  const pendingAssignments: IPendingAssignment[] = [];
+  if (rules.assignments !== "none") {
+    for (const a of assignments) {
+      if (!a.submitted) {
+        pendingAssignments.push({ assignmentId: a.assignmentId, title: a.title, reason: "not submitted" });
+      } else if (rules.assignments === "passed") {
+        if (a.scorePercent === null) {
+          pendingAssignments.push({ assignmentId: a.assignmentId, title: a.title, reason: "not graded yet" });
+        } else if (a.scorePercent < rules.assignmentPassPercent) {
+          pendingAssignments.push({ assignmentId: a.assignmentId, title: a.title, reason: "below the pass mark" });
+        }
+      }
+    }
+  }
+
   return {
-    eligible: lessonsComplete && pendingQuizzes.length === 0,
+    eligible: lessonsComplete && pendingQuizzes.length === 0 && pendingAssignments.length === 0,
     lessonsComplete,
     completionPercentage,
+    requiredLessonPercent: rules.lessonPercent,
     pendingQuizzes,
+    pendingAssignments,
   };
 };
 
@@ -67,13 +112,16 @@ export const generateCertificateId = (): string => {
 export const getEligibilityForStudent = async (
   studentId: string,
   courseId: string
-): Promise<(IEligibility & { enrollmentStatus: string; completedAt?: Date }) | null> => {
+): Promise<(IEligibility & { enrollmentStatus: string; completedAt?: Date; requirements: string[] }) | null> => {
   const enrollment = await EnrollmentModel.findOne({
     student: studentId,
     course: courseId,
     status: { $in: ["active", "completed"] },
   });
   if (!enrollment) return null;
+
+  const course = await CourseModel.findById(courseId).select("completionRules").lean();
+  const rules = withDefaults((course as any)?.completionRules);
 
   const quizzes = await QuizModel.find({ course: courseId }).select("_id title");
   const passedQuizIds = new Set(
@@ -86,17 +134,40 @@ export const getEligibilityForStudent = async (
     ).map((a) => String(a.quiz))
   );
 
+  // assignments only matter when the course's rules ask for them
+  let assignmentStates: IAssignmentState[] = [];
+  if (rules.assignments !== "none") {
+    const [assignments, submissions] = await Promise.all([
+      AssignmentModel.find({ course: courseId }).select("_id title maxMarks").lean(),
+      AssignmentSubmissionModel.find({ course: courseId, student: studentId }).select("assignment marks").lean(),
+    ]);
+    const byAssignment = new Map(submissions.map((s: any) => [String(s.assignment), s]));
+    assignmentStates = assignments.map((a: any) => {
+      const sub: any = byAssignment.get(String(a._id));
+      return {
+        assignmentId: String(a._id),
+        title: a.title,
+        submitted: !!sub,
+        scorePercent:
+          sub && typeof sub.marks === "number" && a.maxMarks > 0 ? Math.round((sub.marks / a.maxMarks) * 1000) / 10 : null,
+      };
+    });
+  }
+
   const result = computeEligibility(
     enrollment.completionPercentage,
     quizzes.map((q) => ({
       quizId: String(q._id),
       title: q.title,
       passed: passedQuizIds.has(String(q._id)),
-    }))
+    })),
+    rules,
+    assignmentStates
   );
 
   return {
     ...result,
+    requirements: describeRules(rules, Object.fromEntries(quizzes.map((q) => [String(q._id), q.title]))),
     enrollmentStatus: enrollment.status,
     completedAt: enrollment.completedAt,
   };

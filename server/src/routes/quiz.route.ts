@@ -4,6 +4,7 @@ import {
   authorizeQuizOwner,
   authorizeRoles,
   isAuthenticated,
+  requirePermission,
 } from "../middleware/auth";
 import {
   createQuiz,
@@ -23,6 +24,7 @@ const quizRouter = express.Router();
 quizRouter.post(
   "/courses/:id/quizzes",
   isAuthenticated,
+  requirePermission("quiz.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   createQuiz
@@ -39,6 +41,7 @@ quizRouter.get("/quizzes/:id", isAuthenticated, getQuiz);
 quizRouter.put(
   "/quizzes/:id",
   isAuthenticated,
+  requirePermission("quiz.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeQuizOwner,
   editQuiz
@@ -47,6 +50,7 @@ quizRouter.put(
 quizRouter.delete(
   "/quizzes/:id",
   isAuthenticated,
+  requirePermission("quiz.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeQuizOwner,
   deleteQuiz
