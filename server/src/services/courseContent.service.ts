@@ -1,7 +1,9 @@
-import { toPublicQuestion } from "../utils/publicProfile";
 import ModuleModel from "../models/module.model";
 import LessonModel from "../models/lesson.model";
+import CourseMaterialModel from "../models/courseMaterial.model";
+import DiscussionModel from "../models/discussion.model";
 import LessonProgressModel from "../models/lessonProgress.model";
+import { removeLessonVideos } from "./videoStorage.service";
 
 // ------------------- Modules & lessons sync -------------------
 //
@@ -71,8 +73,14 @@ export const syncModulesAndLessons = async (courseId: any, courseData: any) => {
 
   const removedIds = [...existingLessonIds].filter((id) => !keptLessonIds.has(id));
   if (removedIds.length) {
+    // uploaded videos of removed lessons are deleted from storage too
+    await removeLessonVideos({ _id: { $in: removedIds } });
     await LessonModel.deleteMany({ _id: { $in: removedIds } });
     await LessonProgressModel.deleteMany({ lessonId: { $in: removedIds } });
+    // a material attached to a removed lesson stays in the course, just unattached
+    await CourseMaterialModel.updateMany({ lesson: { $in: removedIds } }, { $unset: { lesson: 1 } });
+    // ...and so does a discussion about it
+    await DiscussionModel.updateMany({ lesson: { $in: removedIds } }, { $unset: { lesson: 1 } });
   }
 };
 
@@ -102,12 +110,14 @@ export const buildCourseDataArray = async (courseId: any, safeFields: boolean) =
         videoSection: module.title,
         videoLength: lesson.videoLength,
         videoPlayer: lesson.videoPlayer,
+        // an uploaded (private) video: the page asks for a watch link
+        hasVideoUpload: !!lesson.video,
+        videoUpload: lesson.video ? { duration: lesson.video.duration, bytes: lesson.video.bytes } : undefined,
       };
       if (!safeFields) {
         item.videoUrl = lesson.videoUrl;
         item.links = lesson.links;
         item.suggestion = lesson.suggestion;
-        item.questions = (lesson.questions || []).map(toPublicQuestion);
       }
       flattened.push(item);
     }
