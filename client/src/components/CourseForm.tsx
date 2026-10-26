@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useGetCategoriesQuery } from "@/redux/features/categories/categoriesApi";
 import { useGetDepartmentsQuery } from "@/redux/features/departments/departmentsApi";
+import LessonVideoUpload from "./LessonVideoUpload";
 
 type Benefit = { title: string };
 type Link = { title: string; url: string };
@@ -19,6 +20,9 @@ type Lesson = {
   videoSection: string;
   videoLength: number;
   links: Link[];
+  // present for a saved lesson with an uploaded video (read-only here)
+  hasVideoUpload?: boolean;
+  videoUpload?: { duration: number; bytes: number };
 };
 
 export type CourseFormValues = {
@@ -66,6 +70,7 @@ export default function CourseForm({
   submitLabel = "Publish course",
   showStatus = true,
   departmentHint,
+  courseId,
 }: {
   initialValues?: Partial<CourseFormValues>;
   onSubmit: (values: CourseFormValues) => void;
@@ -75,6 +80,8 @@ export default function CourseForm({
   showStatus?: boolean;
   // Shown under the department select, e.g. what leaving it empty does
   departmentHint?: string;
+  // Only when editing a saved course: lets saved lessons get an uploaded video
+  courseId?: string;
 }) {
   const { data: categoriesData, isLoading: categoriesLoading } = useGetCategoriesQuery(undefined);
   const categories = categoriesData?.categories || [];
@@ -513,6 +520,14 @@ export default function CourseForm({
               value={lesson.videoUrl}
               onChange={(e) => updateLesson(i, { videoUrl: e.target.value })}
             />
+            {courseId && (
+              <LessonVideoUpload
+                courseId={courseId}
+                lessonId={lesson._id}
+                current={lesson.hasVideoUpload ? lesson.videoUpload : null}
+                onUploaded={(minutes) => updateLesson(i, { videoLength: minutes })}
+              />
+            )}
             <div className="grid grid-cols-2 gap-3">
               <input
                 className={inputClass}

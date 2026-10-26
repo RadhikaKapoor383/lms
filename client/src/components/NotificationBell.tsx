@@ -9,16 +9,19 @@ import {
   useMarkNotificationReadMutation,
 } from "@/redux/features/notifications/notificationsApi";
 import { safeLink, timeAgo } from "@/utils/notifications";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 
 // Rendered in the header for logged-in users only (see Header.tsx), so the
-// query never fires for visitors. It re-checks every minute, which is plenty
-// for "new assignment" style updates without a websocket.
+// query never fires for visitors. New notifications arrive straight away over
+// Socket.io; the list is still re-checked now and then (every minute when the
+// live connection is down, every 5 minutes when it is up) as a safety net.
 export default function NotificationBell() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const { data } = useGetMyNotificationsQuery(undefined, { pollingInterval: 60000 });
+  const live = useRealtimeNotifications();
+  const { data } = useGetMyNotificationsQuery(undefined, { pollingInterval: live ? 300000 : 60000 });
   const [markRead] = useMarkNotificationReadMutation();
   const [markAllRead] = useMarkAllNotificationsReadMutation();
 
