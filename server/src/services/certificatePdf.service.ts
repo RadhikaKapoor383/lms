@@ -1,9 +1,11 @@
 import PDFDocument from "pdfkit";
+import { Weight, availableFonts, canDrawAll, scriptOf } from "./certificateFonts.service";
 
 // Draws a certificate as a one-page A4 landscape PDF.
 //
 // PDFKit's built-in fonts only cover Latin text (letters like a, e, n with
-// accents are fine; Urdu, Hindi, Chinese... are not). Rather than print a
+// accents). Urdu and Hindi names are drawn with Noto fonts when those are in
+// server/fonts (see certificateFonts.service.ts). Rather than print a
 // certificate with missing letters in someone's name, callers check
 // isPdfSafeText() first and fall back to the browser's print-to-PDF page.
 
@@ -19,10 +21,8 @@ export interface ICertificatePdfData {
   revokedAt?: Date;
 }
 
-const PDF_SAFE_TEXT = /^[\x20-\x7E\xA0-\xFF]*$/;
-
-export const isPdfSafeText = (...texts: string[]): boolean =>
-  texts.every((t) => PDF_SAFE_TEXT.test(t));
+// Every text can be drawn: Latin always, Urdu / Hindi when their font is there.
+export const isPdfSafeText = (...texts: string[]): boolean => canDrawAll(texts);
 
 // Same on every server, whatever its time zone.
 export const formatCertificateDate = (value: Date): string =>
@@ -69,13 +69,28 @@ export const renderCertificatePdf = (
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    // A text in Urdu or Hindi uses that script's font in the same weight as
+    // the built-in font it replaces; everything else keeps the built-in font.
+    const fonts = availableFonts();
+    for (const [script, files] of Object.entries(fonts)) {
+      doc.registerFont(`${script}-regular`, files!.regular);
+      doc.registerFont(`${script}-bold`, files!.bold);
+    }
+    const BOLD = new Set(["Times-Bold", "Helvetica-Bold", "Courier-Bold"]);
+    const fontFor = (text: string, builtin: string): string => {
+      const script = scriptOf(text);
+      if (!script || script === "latin" || !fonts[script]) return builtin;
+      const weight: Weight = BOLD.has(builtin) ? "bold" : "regular";
+      return `${script}-${weight}`;
+    };
+
     const W = doc.page.width;
     const H = doc.page.height;
     const ink = "#1f1f1f";
     const grey = "#6b6b6b";
     const textWidth = W - 160;
     const centered = (text: string, y: number, size: number, font: string, color: string) => {
-      doc.font(font).fontSize(size).fillColor(color).text(text, 80, y, {
+      doc.font(fontFor(text, font)).fontSize(size).fillColor(color).text(text, 80, y, {
         width: textWidth,
         align: "center",
         lineBreak: false,
@@ -90,11 +105,11 @@ export const renderCertificatePdf = (
     centered("Certificate of Completion", 108, 40, "Times-Bold", ink);
 
     centered("This certifies that", 185, 15, "Helvetica", grey);
-    const nameSize = fitFontSize(doc, "Times-Bold", data.studentName, textWidth, 36, 16);
+    const nameSize = fitFontSize(doc, fontFor(data.studentName, "Times-Bold"), data.studentName, textWidth, 36, 16);
     centered(data.studentName, 212, nameSize, "Times-Bold", ink);
 
     centered("has successfully completed the course", 275, 15, "Helvetica", grey);
-    const courseSize = fitFontSize(doc, "Times-Bold", data.courseName, textWidth, 28, 14);
+    const courseSize = fitFontSize(doc, fontFor(data.courseName, "Times-Bold"), data.courseName, textWidth, 28, 14);
     centered(data.courseName, 303, courseSize, "Times-Bold", ink);
 
     // date and instructor, each above a line with a caption
@@ -103,7 +118,7 @@ export const renderCertificatePdf = (
     const rightX = W / 2 + 40;
     const baseY = 405;
     const column = (x: number, value: string, caption: string) => {
-      doc.font("Helvetica-Bold").fontSize(14).fillColor(ink).text(value, x, baseY, {
+      doc.font(fontFor(value, "Helvetica-Bold")).fontSize(14).fillColor(ink).text(value, x, baseY, {
         width: colWidth,
         align: "center",
         lineBreak: false,
