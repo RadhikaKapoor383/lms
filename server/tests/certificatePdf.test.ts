@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "fs";
+import path from "path";
 import {
   formatCertificateDate,
   isPdfSafeText,
@@ -33,14 +35,34 @@ describe("renderCertificatePdf", () => {
   });
 });
 
+// Runs only where the Noto fonts are in server/fonts (see fonts/README.md).
+const hasFonts = existsSync(path.resolve("fonts/NotoNaskhArabic-Regular.ttf")) &&
+  existsSync(path.resolve("fonts/NotoSansDevanagari-Regular.ttf"));
+
+describe.skipIf(!hasFonts)("Urdu and Hindi names (with the fonts installed)", () => {
+  it("renders certificates whose names are in Urdu and in Hindi", async () => {
+    for (const studentName of ["رادھیکا کپور", "राधिका कपूर"]) {
+      expect(isPdfSafeText(studentName)).toBe(true);
+      const pdf = await renderCertificatePdf({ ...sample, studentName }, "https://lms.example/certificates/CERT-ABC123");
+      expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+      expect(pdf.toString("latin1")).toMatch(/Noto(Naskh|SansDevanagari)/); // the font is embedded
+    }
+  });
+});
+
 describe("isPdfSafeText", () => {
   it("accepts Latin names, including accents", () => {
     expect(isPdfSafeText("Radhika Kapoor", "José Müller-Šmith".replace("Š", "S"))).toBe(true);
   });
-  it("rejects scripts the built-in fonts can't draw", () => {
-    expect(isPdfSafeText("राधिका")).toBe(false);
-    expect(isPdfSafeText("رادھیکا")).toBe(false);
-    expect(isPdfSafeText("Name", "课程")).toBe(false);
+  it("rejects scripts there is no font for", () => {
+    process.env.CERTIFICATE_FONTS_DIR = "/nonexistent-font-dir";
+    try {
+      expect(isPdfSafeText("राधिका")).toBe(false);
+      expect(isPdfSafeText("رادھیکا")).toBe(false);
+      expect(isPdfSafeText("Name", "课程")).toBe(false);
+    } finally {
+      delete process.env.CERTIFICATE_FONTS_DIR;
+    }
   });
   it("rejects control characters", () => {
     expect(isPdfSafeText("Line\nBreak")).toBe(false);
