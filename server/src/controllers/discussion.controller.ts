@@ -1,3 +1,4 @@
+import LessonModel from "../models/lesson.model";
 import { Request, Response, NextFunction } from "express";
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
@@ -52,6 +53,7 @@ export const isAnsweredByStaff = (replies: { authorRole: string }[]) =>
 const toListItem = (d: IDiscussion, courseName?: string) => ({
   _id: d._id,
   course: d.course,
+  lesson: d.lesson,
   courseName,
   title: d.title,
   preview: d.body.length > PREVIEW_LENGTH ? `${d.body.slice(0, PREVIEW_LENGTH)}…` : d.body,
@@ -86,7 +88,16 @@ export const listDiscussions = CatchAsyncError(
         return next(new ErrorHandler("You are not eligible to access this course", 404));
       }
 
-      const threads = await DiscussionModel.find({ course: course._id })
+      // ?lesson=<id>: only the threads about one lesson (the lesson page)
+      const filter: Record<string, any> = { course: course._id };
+      if (req.query.lesson !== undefined) {
+        if (typeof req.query.lesson !== "string" || !isObjectId(req.query.lesson)) {
+          return next(new ErrorHandler("Invalid lesson id", 400));
+        }
+        filter.lesson = req.query.lesson;
+      }
+
+      const threads = await DiscussionModel.find(filter)
         .sort({ pinned: -1, lastActivityAt: -1 })
         .limit(100);
 
@@ -124,9 +135,19 @@ export const createDiscussion = CatchAsyncError(
         return next(new ErrorHandler("You are not eligible to access this course", 404));
       }
 
+      // optional: the lesson it is about, which must be a lesson of this course
+      let lesson: string | undefined;
+      if (req.body.lessonId) {
+        if (!isObjectId(req.body.lessonId) || !(await LessonModel.exists({ _id: req.body.lessonId, course: course._id }))) {
+          return next(new ErrorHandler("That lesson does not belong to this course", 400));
+        }
+        lesson = String(req.body.lessonId);
+      }
+
       const authorId = String(req.user?._id);
       const discussion = await DiscussionModel.create({
         course: course._id,
+        lesson,
         author: authorId,
         authorName: req.user?.name,
         authorRole: req.user?.role,

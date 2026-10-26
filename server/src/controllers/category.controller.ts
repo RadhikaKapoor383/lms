@@ -6,6 +6,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import CategoryModel from "../models/category.model";
 import CourseModel from "../models/course.model";
 import { logActivity } from "../utils/auditLog";
+import { redis } from "../utils/redis";
 
 // ------------------- List (anyone signed in - used by the course form's dropdown) -------------------
 
@@ -72,6 +73,12 @@ export const updateCategory = CatchAsyncError(
       if (!category) {
         return next(new ErrorHandler("Category not found", 404));
       }
+
+      // Cached course pages (and the course list) hold the old name - drop them.
+      const courseIds = (await CourseModel.find({ category: id }).select("_id").lean()).map((c: any) =>
+        String(c._id)
+      );
+      await redis.del("allCourses", ...courseIds);
 
       logActivity(req, "category.rename", `Renamed a category to "${name}"`, {
         categoryId: id,

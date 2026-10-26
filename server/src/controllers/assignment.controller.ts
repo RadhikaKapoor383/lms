@@ -1,3 +1,4 @@
+import { tryIssueCertificate } from "../services/certificate.service";
 import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 
@@ -269,6 +270,9 @@ export const submitAssignment = CatchAsyncError(
         link: `/instructor/assignments/${assignment._id}/submissions`,
       });
 
+      // "submit every assignment" may be the last thing this course required
+      await tryIssueCertificate(String(req.user?._id), String(assignment.course));
+
       res.status(existing ? 200 : 201).json({ success: true, submission });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -290,7 +294,7 @@ export const gradeSubmission = CatchAsyncError(
         return next(new ErrorHandler("marks is required", 400));
       }
 
-      const assignment = await AssignmentModel.findById(assignmentId).select("maxMarks title");
+      const assignment = await AssignmentModel.findById(assignmentId).select("maxMarks title course");
       if (!assignment) {
         return next(new ErrorHandler("Assignment not found", 404));
       }
@@ -314,6 +318,9 @@ export const gradeSubmission = CatchAsyncError(
         message: `Your submission for "${assignment.title}" was graded`,
         link: `/course-access/${assignment.course}/assignments`,
       });
+
+      // a course whose completion rules require passed assignments may now be complete
+      await tryIssueCertificate(String(studentId), String(assignment.course));
 
       res.status(200).json({ success: true, submission });
     } catch (error: any) {

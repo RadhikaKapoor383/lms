@@ -82,7 +82,7 @@ export const downloadCertificatePdf = CatchAsyncError(
       ) {
         return next(
           new ErrorHandler(
-            "A PDF can't be made for names with non-Latin letters yet. Use Print / Save as PDF on the certificate page instead.",
+            "A PDF can't be made for this certificate's names on this server (it needs a font for their script). Use Print / Save as PDF on the certificate page instead.",
             422
           )
         );
@@ -165,7 +165,10 @@ export const getCertificateStatus = CatchAsyncError(
           eligible: eligibility.eligible,
           lessonsComplete: eligibility.lessonsComplete,
           completionPercentage: eligibility.completionPercentage,
+          requiredLessonPercent: eligibility.requiredLessonPercent,
           pendingQuizzes: eligibility.pendingQuizzes,
+          pendingAssignments: eligibility.pendingAssignments,
+          requirements: eligibility.requirements,
           certificate: certificate
             ? { certificateId: certificate.certificateId, status: certificate.status }
             : null,
