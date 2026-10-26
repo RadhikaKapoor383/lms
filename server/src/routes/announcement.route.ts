@@ -1,5 +1,5 @@
 import express from "express";
-import { authorizeCourseOwner, authorizeRoles, isAuthenticated } from "../middleware/auth";
+import { authorizeCourseOwner, authorizeRoles, isAuthenticated, requirePermission } from "../middleware/auth";
 import {
   createAnnouncement,
   createCourseAnnouncement,
@@ -36,6 +36,7 @@ announcementRouter.get("/courses/:id/announcements", isAuthenticated, getCourseA
 announcementRouter.post(
   "/courses/:id/announcements",
   isAuthenticated,
+  requirePermission("announcement.post"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   createCourseAnnouncement
@@ -44,6 +45,7 @@ announcementRouter.post(
 announcementRouter.delete(
   "/courses/:id/announcements/:announcementId",
   isAuthenticated,
+  requirePermission("announcement.post"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   deleteCourseAnnouncement

@@ -21,6 +21,12 @@ export interface IDiscussionReply {
 // if the account is renamed, and "answered by staff" doesn't need a user lookup.
 export interface IDiscussion extends Document {
   course: mongoose.Types.ObjectId;
+  // Optional: the lesson this thread is about ("ask about this lesson"). Lesson
+  // Q&A from before Discussions existed was moved into threads like this.
+  lesson?: mongoose.Types.ObjectId;
+  // Set on threads made by the lesson Q&A migration, so running it twice
+  // never copies a question twice.
+  migratedFrom?: string;
   author: mongoose.Types.ObjectId;
   authorName: string;
   authorRole: DiscussionRole;
@@ -44,6 +50,8 @@ const replySchema = new Schema<IDiscussionReply>({
 const discussionSchema = new Schema<IDiscussion>(
   {
     course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
+    lesson: { type: Schema.Types.ObjectId, ref: "Lesson" },
+    migratedFrom: { type: String },
     author: { type: Schema.Types.ObjectId, ref: "User", required: true },
     authorName: { type: String, required: true },
     authorRole: { type: String, enum: DISCUSSION_ROLES, required: true },
@@ -58,6 +66,8 @@ const discussionSchema = new Schema<IDiscussion>(
 
 // the course list: pinned first, then most recently active
 discussionSchema.index({ course: 1, pinned: -1, lastActivityAt: -1 });
+discussionSchema.index({ course: 1, lesson: 1, lastActivityAt: -1 });
+discussionSchema.index({ migratedFrom: 1 }, { unique: true, sparse: true });
 
 const DiscussionModel: Model<IDiscussion> = mongoose.model("Discussion", discussionSchema);
 export default DiscussionModel;

@@ -15,7 +15,13 @@ export interface ILesson extends Document {
   videoPlayer: string;
   links: ILink[];
   suggestion: string;
-  questions: IComment[];
+  // A video uploaded to private storage (see videoUpload.service.ts). When set
+  // it is what the lesson plays, instead of videoUrl. The storage id never
+  // leaves the server.
+  video?: { publicId: string; format: string; bytes: number; duration: number; uploadedAt: Date };
+  // LEGACY: the old lesson Q&A, replaced by Discussions. Kept (hidden) only
+  // until `npm run migrate:lesson-questions -- --clear` has moved it over.
+  questions?: IComment[];
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -33,7 +39,19 @@ const lessonSchema = new Schema<ILesson>(
     videoPlayer: { type: String },
     links: [linkSchema],
     suggestion: { type: String },
-    questions: [commentSchema],
+    video: {
+      type: new Schema(
+        {
+          publicId: { type: String, required: true },
+          format: { type: String, required: true },
+          bytes: { type: Number, required: true },
+          duration: { type: Number, required: true },
+          uploadedAt: { type: Date, default: Date.now },
+        },
+        { _id: false }
+      ),
+    },
+    questions: { type: [commentSchema], select: false, default: undefined },
     order: { type: Number, default: 0 },
   },
   { timestamps: true }

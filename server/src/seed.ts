@@ -9,6 +9,11 @@ import CategoryModel from "./models/category.model";
 import DepartmentModel from "./models/department.model";
 import { syncModulesAndLessons } from "./services/courseContent.service";
 
+//   npm run seed               only the admin account
+//   npm run seed -- --demo     also demo instructor + student, categories,
+//                              departments and three sample courses (dev only)
+const DEMO = process.argv.slice(2).includes("--demo");
+
 const ADMIN_EMAIL = "admin@ledger.dev";
 const ADMIN_PASSWORD = "admin1234";
 
@@ -147,7 +152,17 @@ const seed = async () => {
     console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
   }
 
-  // 2. Create demo instructor + student (dev only)
+  if (!DEMO) {
+    console.log("\nSeed complete. Log in with:");
+    console.log(`  Email:    ${ADMIN_EMAIL}`);
+    console.log(`  Password: ${ADMIN_PASSWORD}`);
+    console.log("(change this password once you've logged in)");
+    console.log("For demo users and sample courses (dev only): npm run seed -- --demo");
+    await mongoose.disconnect();
+    process.exit(0);
+  }
+
+  // 2. Create demo instructor + student (dev only, --demo)
   const demoUsers = [
     { name: "Demo Instructor", email: INSTRUCTOR_EMAIL, role: "instructor" as const },
     { name: "Demo Student", email: STUDENT_EMAIL, role: "student" as const },
