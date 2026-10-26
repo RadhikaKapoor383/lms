@@ -1,10 +1,11 @@
 import express from "express";
-import { authorizeCourseOwner, authorizeRoles, isAuthenticated } from "../middleware/auth";
+import { authorizeCourseOwner, authorizeRoles, isAuthenticated, requirePermission } from "../middleware/auth";
 import {
   deleteMaterial,
   downloadMaterial,
   getCourseMaterials,
   receiveMaterialFile,
+  setMaterialLesson,
   uploadMaterial,
 } from "../controllers/material.controller";
 
@@ -15,6 +16,7 @@ const materialRouter = express.Router();
 materialRouter.post(
   "/courses/:id/materials",
   isAuthenticated,
+  requirePermission("material.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   receiveMaterialFile,
@@ -25,9 +27,19 @@ materialRouter.post(
 materialRouter.get("/courses/:id/materials", isAuthenticated, getCourseMaterials);
 materialRouter.get("/courses/:id/materials/:materialId/download", isAuthenticated, downloadMaterial);
 
+materialRouter.put(
+  "/courses/:id/materials/:materialId/lesson",
+  isAuthenticated,
+  requirePermission("material.manage"),
+  authorizeRoles("admin", "instructor"),
+  authorizeCourseOwner,
+  setMaterialLesson
+);
+
 materialRouter.delete(
   "/courses/:id/materials/:materialId",
   isAuthenticated,
+  requirePermission("material.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   deleteMaterial
