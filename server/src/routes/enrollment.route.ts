@@ -3,6 +3,7 @@ import {
   authorizeCourseOwner,
   authorizeRoles,
   isAuthenticated,
+  requirePermission,
 } from "../middleware/auth";
 import {
   enrollInFreeCourse,
@@ -19,8 +20,8 @@ import {
 const enrollmentRouter = express.Router();
 
 // ---- Student ----
-enrollmentRouter.post("/enroll", isAuthenticated, authorizeRoles("student"), enrollInFreeCourse);
-enrollmentRouter.post("/enroll-with-code", isAuthenticated, authorizeRoles("student"), enrollWithCode);
+enrollmentRouter.post("/enroll", isAuthenticated, requirePermission("enroll.self"), authorizeRoles("student"), enrollInFreeCourse);
+enrollmentRouter.post("/enroll-with-code", isAuthenticated, requirePermission("enroll.self"), authorizeRoles("student"), enrollWithCode);
 enrollmentRouter.get("/my-enrollments", isAuthenticated, authorizeRoles("student"), getMyEnrollments);
 enrollmentRouter.get("/progress/:courseId", isAuthenticated, authorizeRoles("student"), getCourseProgress);
 enrollmentRouter.put(
@@ -41,6 +42,7 @@ enrollmentRouter.get(
 enrollmentRouter.post(
   "/instructor/courses/:id/enroll",
   isAuthenticated,
+  requirePermission("student.enroll"),
   authorizeRoles("instructor", "admin"),
   authorizeCourseOwner,
   enrollStudentByInstructor
@@ -48,6 +50,7 @@ enrollmentRouter.post(
 enrollmentRouter.delete(
   "/instructor/courses/:id/students/:studentId",
   isAuthenticated,
+  requirePermission("student.enroll"),
   authorizeRoles("instructor", "admin"),
   authorizeCourseOwner,
   unenrollStudent

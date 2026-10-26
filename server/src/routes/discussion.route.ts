@@ -1,5 +1,5 @@
 import express from "express";
-import { authorizeRoles, isAuthenticated } from "../middleware/auth";
+import { authorizeRoles, isAuthenticated, requirePermission } from "../middleware/auth";
 import {
   addDiscussionReply,
   createDiscussion,
@@ -18,13 +18,13 @@ const discussionRouter = express.Router();
 // student) and whether they can moderate it.
 
 discussionRouter.get("/courses/:id/discussions", isAuthenticated, listDiscussions);
-discussionRouter.post("/courses/:id/discussions", isAuthenticated, createDiscussion);
+discussionRouter.post("/courses/:id/discussions", isAuthenticated, requirePermission("discussion.post"), createDiscussion);
 
 discussionRouter.get("/discussions/:discussionId", isAuthenticated, getDiscussion);
 discussionRouter.delete("/discussions/:discussionId", isAuthenticated, deleteDiscussion);
 discussionRouter.put("/discussions/:discussionId/pin", isAuthenticated, setDiscussionPinned);
 
-discussionRouter.post("/discussions/:discussionId/replies", isAuthenticated, addDiscussionReply);
+discussionRouter.post("/discussions/:discussionId/replies", isAuthenticated, requirePermission("discussion.post"), addDiscussionReply);
 discussionRouter.delete(
   "/discussions/:discussionId/replies/:replyId",
   isAuthenticated,

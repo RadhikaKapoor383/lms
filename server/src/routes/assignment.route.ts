@@ -4,6 +4,7 @@ import {
   authorizeCourseOwner,
   authorizeRoles,
   isAuthenticated,
+  requirePermission,
 } from "../middleware/auth";
 import {
   createAssignment,
@@ -22,6 +23,7 @@ const assignmentRouter = express.Router();
 assignmentRouter.post(
   "/courses/:id/assignments",
   isAuthenticated,
+  requirePermission("assignment.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   createAssignment
@@ -36,6 +38,7 @@ assignmentRouter.get("/courses/:id/assignments", isAuthenticated, getCourseAssig
 assignmentRouter.put(
   "/assignments/:id",
   isAuthenticated,
+  requirePermission("assignment.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeAssignmentOwner,
   editAssignment
@@ -44,6 +47,7 @@ assignmentRouter.put(
 assignmentRouter.delete(
   "/assignments/:id",
   isAuthenticated,
+  requirePermission("assignment.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeAssignmentOwner,
   deleteAssignment
@@ -60,6 +64,7 @@ assignmentRouter.get(
 assignmentRouter.put(
   "/assignments/:id/submissions/:studentId/grade",
   isAuthenticated,
+  requirePermission("assignment.manage"),
   authorizeRoles("admin", "instructor"),
   authorizeAssignmentOwner,
   gradeSubmission
