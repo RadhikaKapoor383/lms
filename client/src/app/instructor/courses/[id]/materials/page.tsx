@@ -6,10 +6,12 @@ import Loader from "@/components/Loader";
 import {
   useDeleteMaterialMutation,
   useGetCourseMaterialsQuery,
+  useSetMaterialLessonMutation,
   useUploadMaterialMutation,
 } from "@/redux/features/materials/materialsApi";
-import { useGetInstructorCoursesQuery } from "@/redux/features/courses/coursesApi";
+import { useGetCourseForEditQuery } from "@/redux/features/courses/coursesApi";
 import { downloadMaterial, formatFileSize } from "@/utils/downloadMaterial";
+import { groupMaterialsByLesson } from "@/utils/materialGroups";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPT = ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx";
@@ -18,19 +20,44 @@ export default function CourseMaterialsPage() {
   const params = useParams();
   const courseId = params?.id as string;
 
-  const { data: coursesData } = useGetInstructorCoursesQuery(undefined);
-  const course = coursesData?.courses?.find((c: any) => c._id === courseId);
+  // the edit view has the lessons with their ids (admins can open this page too)
+  const { data: courseData } = useGetCourseForEditQuery(courseId);
+  const course = courseData?.course;
+  const lessons: { _id: string; title: string }[] = course?.courseData || [];
 
   const { data, isLoading, isError } = useGetCourseMaterialsQuery(courseId);
   const [uploadMaterial, { isLoading: isUploading }] = useUploadMaterialMutation();
   const [deleteMaterial] = useDeleteMaterialMutation();
+  const [setMaterialLesson] = useSetMaterialLessonMutation();
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
+  const [lessonId, setLessonId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
 
   const materials = data?.materials || [];
+  const groups = groupMaterialsByLesson(materials, lessons);
+
+  const lessonOptions = (
+    <>
+      <option value="">Whole course</option>
+      {lessons.map((l, i) => (
+        <option key={l._id} value={l._id}>
+          Lesson {i + 1}: {l.title}
+        </option>
+      ))}
+    </>
+  );
+
+  const handleMove = async (m: any, target: string) => {
+    setError("");
+    try {
+      await setMaterialLesson({ courseId, materialId: m._id, lessonId: target }).unwrap();
+    } catch (err: any) {
+      setError(err?.data?.message || "Could not move the file");
+    }
+  };
 
   const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0] || null;
@@ -50,6 +77,7 @@ export default function CourseMaterialsPage() {
     setError("");
     const formData = new FormData();
     if (title.trim()) formData.append("title", title.trim());
+    if (lessonId) formData.append("lessonId", lessonId);
     formData.append("file", file);
     try {
       await uploadMaterial({ courseId, formData }).unwrap();
@@ -117,6 +145,22 @@ export default function CourseMaterialsPage() {
             className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
           />
         </div>
+        <div>
+          <label htmlFor="material-lesson" className="block text-sm font-medium text-ink dark:text-parchment">
+            Attach to
+          </label>
+          <select
+            id="material-lesson"
+            value={lessonId}
+            onChange={(e) => setLessonId(e.target.value)}
+            className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 text-ink outline-none focus:border-mustard dark:border-ink-light dark:text-parchment"
+          >
+            {lessonOptions}
+          </select>
+          <p className="mt-1 text-xs text-ink/60 dark:text-parchment/60">
+            A lesson&apos;s files also show under that lesson for students.
+          </p>
+        </div>
         <button
           type="submit"
           disabled={isUploading || !file}
@@ -134,29 +178,44 @@ export default function CourseMaterialsPage() {
         <p className="mt-6 text-ink/60 dark:text-parchment/60">No materials yet.</p>
       )}
 
-      <div className="mt-8 divide-y divide-parchment-dark dark:divide-ink-light">
-        {materials.map((m: any) => (
-          <div key={m._id} className="flex items-center justify-between py-4">
-            <div>
-              <p className="font-medium text-ink dark:text-parchment">{m.title}</p>
-              <p className="text-sm text-ink/60 dark:text-parchment/60">
-                {m.ext.toUpperCase()} · {formatFileSize(m.size)} · {new Date(m.createdAt).toLocaleDateString()}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => handleDownload(m)}
-                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
-              >
-                Download
-              </button>
-              <button onClick={() => handleDelete(m)} className="text-sm text-clay hover:underline">
-                Delete
-              </button>
-            </div>
+      {groups.map((group) => (
+        <section key={group.lessonId || "course"} className="mt-8">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-ink/50 dark:text-parchment/50">
+            {group.title}
+          </h2>
+          <div className="mt-2 divide-y divide-parchment-dark dark:divide-ink-light">
+            {group.materials.map((m: any) => (
+              <div key={m._id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+                <div className="min-w-0">
+                  <p className="font-medium text-ink dark:text-parchment">{m.title}</p>
+                  <p className="text-sm text-ink/60 dark:text-parchment/60">
+                    {m.ext.toUpperCase()} · {formatFileSize(m.size)} · {new Date(m.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <select
+                    aria-label={`Attach ${m.title} to`}
+                    value={m.lesson && lessons.some((l) => l._id === String(m.lesson)) ? String(m.lesson) : ""}
+                    onChange={(e) => handleMove(m, e.target.value)}
+                    className="max-w-[14rem] border border-parchment-dark bg-transparent px-2 py-1 text-sm text-ink dark:border-ink-light dark:text-parchment"
+                  >
+                    {lessonOptions}
+                  </select>
+                  <button
+                    onClick={() => handleDownload(m)}
+                    className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+                  >
+                    Download
+                  </button>
+                  <button onClick={() => handleDelete(m)} className="text-sm text-clay hover:underline">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </section>
+      ))}
     </div>
   );
 }
