@@ -20,7 +20,7 @@ const rawBaseQuery = fetchBaseQuery({
 //                               it once via /refresh and retry the request.
 // Other errors (400 validation, 403, 404...) are passed through untouched, so a
 // failed form is never sent twice.
-const SESSION_OVER = ["SESSION_IDLE", "SESSION_MAX"];
+const SESSION_OVER = ["SESSION_IDLE", "SESSION_MAX", "SESSION_REVOKED"];
 const codeOf = (error: unknown): string | undefined => (error as any)?.data?.code;
 const messageOf = (error: unknown): string =>
   (error as any)?.data?.message || "Your session has ended. Please log in again.";
@@ -59,6 +59,6 @@ const baseQueryWithReauth: BaseQueryFn<
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Courses", "User", "Notifications", "Orders", "layout", "Announcements", "Categories", "Departments", "Enrollments", "Assignments", "Quizzes", "Certificates", "Discussions", "Reviews", "Instructors", "Settings", "Reports", "Materials"],
+  tagTypes: ["Courses", "User", "Notifications", "Orders", "layout", "Announcements", "Categories", "Departments", "Permissions", "Enrollments", "Assignments", "Quizzes", "Certificates", "Discussions", "Reviews", "Instructors", "Settings", "Reports", "Materials"],
   endpoints: () => ({}),
 });

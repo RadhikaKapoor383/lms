@@ -40,16 +40,6 @@ export const coursesApi = apiSlice.injectEndpoints({
       providesTags: ["Courses"],
     }),
 
-    addQuestion: builder.mutation({
-      query: ({ question, courseId, contentId }) => ({
-        url: "add-question",
-        method: "PUT",
-        body: { question, courseId, contentId },
-        credentials: "include",
-      }),
-      invalidatesTags: ["Courses"],
-    }),
-
     // ---- Admin endpoints ----
 
     getAdminAllCourses: builder.query({
@@ -132,6 +122,26 @@ export const coursesApi = apiSlice.injectEndpoints({
       invalidatesTags: ["Courses", "Departments"], // department course counts
     }),
 
+    // what a student must do to complete the course (owner or admin)
+    getCompletionRules: builder.query({
+      query: (courseId: string) => ({
+        url: `courses/${courseId}/completion-rules`,
+        method: "GET",
+        credentials: "include",
+      }),
+      providesTags: ["Courses"],
+    }),
+
+    updateCompletionRules: builder.mutation({
+      query: ({ courseId, rules }: { courseId: string; rules: Record<string, unknown> }) => ({
+        url: `courses/${courseId}/completion-rules`,
+        method: "PUT",
+        body: rules,
+        credentials: "include",
+      }),
+      invalidatesTags: ["Courses", "Certificates"],
+    }),
+
     deleteCourseAdmin: builder.mutation({
       query: (id: string) => ({
         url: `delete-course/${id}`,
@@ -148,7 +158,6 @@ export const {
   useGetCourseDetailsQuery,
   useGetCourseContentQuery,
   useGetCourseForEditQuery,
-  useAddQuestionMutation,
   useGetAdminAllCoursesQuery,
   useGetInstructorCoursesQuery,
   useCreateCourseMutation,
@@ -157,6 +166,8 @@ export const {
   useUpdateCourseStatusMutation,
   useSearchCoursesQuery,
   useGetCourseFiltersQuery,
+  useGetCompletionRulesQuery,
+  useUpdateCompletionRulesMutation,
   useSubmitCourseForApprovalMutation,
   useWithdrawCourseSubmissionMutation,
 } = coursesApi;

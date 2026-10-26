@@ -11,6 +11,7 @@
     "migrate:categories": "ts-node-dev --transpile-only src/migrate-categories.ts",
     "migrate:modules": "ts-node-dev --transpile-only src/migrate-modules-lessons.ts",
     "migrate:certificates": "ts-node-dev --transpile-only src/migrate-certificates.ts",
+    "migrate:lesson-questions": "ts-node-dev --transpile-only src/migrate-lesson-questions.ts",
     "build": "tsc && cp -r src/mails dist/mails",
     "start": "node dist/server.js",
     "test": "vitest run",
@@ -33,7 +34,8 @@
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.14",
-    "pdfkit": "^0.15.2"
+    "pdfkit": "^0.15.2",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -47,6 +49,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.15",
     "@types/pdfkit": "^0.13.9",
+    "socket.io-client": "^4.8.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.3",
     "vitest": "^2.1.8"

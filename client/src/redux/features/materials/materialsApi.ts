@@ -24,6 +24,17 @@ export const materialsApi = apiSlice.injectEndpoints({
       invalidatesTags: ["Materials"],
     }),
 
+    // lessonId "" = attach to the whole course instead of one lesson
+    setMaterialLesson: builder.mutation({
+      query: ({ courseId, materialId, lessonId }: { courseId: string; materialId: string; lessonId: string }) => ({
+        url: `courses/${courseId}/materials/${materialId}/lesson`,
+        method: "PUT",
+        body: { lessonId: lessonId || null },
+        credentials: "include",
+      }),
+      invalidatesTags: ["Materials"],
+    }),
+
     deleteMaterial: builder.mutation({
       query: ({ courseId, materialId }: { courseId: string; materialId: string }) => ({
         url: `courses/${courseId}/materials/${materialId}`,
@@ -39,4 +50,5 @@ export const {
   useGetCourseMaterialsQuery,
   useUploadMaterialMutation,
   useDeleteMaterialMutation,
+  useSetMaterialLessonMutation,
 } = materialsApi;
