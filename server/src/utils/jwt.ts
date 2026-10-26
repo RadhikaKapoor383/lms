@@ -2,7 +2,7 @@ import { Response } from "express";
 import jwt from "jsonwebtoken";
 import { IUser } from "../models/user.model";
 import { redis } from "./redis";
-import { getSessionLimits, secondsUntilMax, startSession } from "./session";
+import { getSessionLimits, newRefreshId, secondsUntilMax, startRefreshChain, startSession } from "./session";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -21,14 +21,22 @@ export const TOKEN_SLACK_SECONDS = 120;
 // They never outlive the session's hard cap (default 2 hours from login) by
 // more than the slack above - used at login and whenever the access token is
 // renewed (a renewal keeps the ORIGINAL login time, so it can't stretch the cap).
-export const buildAuthTokens = (userId: string, sid: string, loginAt: number) => {
+// How long new tokens for this login may last.
+export const tokenLifetimes = (loginAt: number) => {
   // With no hard cap (the default) there is nothing to limit: tokens last their
   // normal time and are renewed as long as the person stays active. Whether the
   // login is still alive is the session's idle clock, checked on every request.
   const left =
     Math.max(1, secondsUntilMax(loginAt, getSessionLimits().maxSeconds)) + TOKEN_SLACK_SECONDS;
-  const accessSeconds = Math.min(accessTokenExpire * 60, left);
-  const refreshSeconds = Math.min(refreshTokenExpire * 24 * 60 * 60, left);
+  return {
+    accessSeconds: Math.min(accessTokenExpire * 60, left),
+    refreshSeconds: Math.min(refreshTokenExpire * 24 * 60 * 60, left),
+  };
+};
+
+// `jti` is the refresh token's id (see refresh-token rotation in session.ts).
+export const buildAuthTokens = (userId: string, sid: string, loginAt: number, jti: string) => {
+  const { accessSeconds, refreshSeconds } = tokenLifetimes(loginAt);
 
   const claims = { id: userId, sid, loginAt };
   const common = {
@@ -39,9 +47,10 @@ export const buildAuthTokens = (userId: string, sid: string, loginAt: number) =>
 
   return {
     accessToken: jwt.sign(claims, process.env.ACCESS_TOKEN as string, { expiresIn: accessSeconds }),
-    refreshToken: jwt.sign(claims, process.env.REFRESH_TOKEN as string, { expiresIn: refreshSeconds }),
+    refreshToken: jwt.sign({ ...claims, jti }, process.env.REFRESH_TOKEN as string, { expiresIn: refreshSeconds }),
     accessOptions: { ...common, maxAge: accessSeconds * 1000 },
     refreshOptions: { ...common, maxAge: refreshSeconds * 1000 },
+    refreshSeconds,
   };
 };
 
@@ -59,11 +68,14 @@ export const describeSession = (loginAt: number) => {
 export const sendToken = async (user: IUser, statusCode: number, res: Response) => {
   const userId = String(user._id);
   const { sid, loginAt } = await startSession(userId);
-  const { accessToken, refreshToken, accessOptions, refreshOptions } = buildAuthTokens(
+  const jti = newRefreshId();
+  const { accessToken, refreshToken, accessOptions, refreshOptions, refreshSeconds } = buildAuthTokens(
     userId,
     sid,
-    loginAt
+    loginAt,
+    jti
   );
+  await startRefreshChain(sid, jti, refreshSeconds);
 
   // Cache the user in Redis with a rolling 7-day TTL (this is also how a
   // deactivated or role-changed user gets cut off: deleting it ends every
