@@ -1,5 +1,5 @@
 import express from "express";
-import { authorizeCourseOwner, authorizeRoles, isAuthenticated } from "../middleware/auth";
+import { authorizeCourseOwner, authorizeRoles, isAuthenticated, requirePermission } from "../middleware/auth";
 import {
   addReview,
   deleteReview,
@@ -12,13 +12,14 @@ import {
 const reviewRouter = express.Router();
 
 // student (existing path kept): create or edit my review
-reviewRouter.put("/add-review/:id", isAuthenticated, authorizeRoles("student"), addReview);
+reviewRouter.put("/add-review/:id", isAuthenticated, requirePermission("review.write"), authorizeRoles("student"), addReview);
 reviewRouter.get("/courses/:id/my-review", isAuthenticated, authorizeRoles("student"), getMyReview);
 
 // instructor of the course, or admin: reply to a review
 reviewRouter.put(
   "/courses/:id/reviews/:reviewId/reply",
   isAuthenticated,
+  requirePermission("review.reply"),
   authorizeRoles("admin", "instructor"),
   authorizeCourseOwner,
   replyToReview
