@@ -11,9 +11,9 @@ export default function InstructorLayout({
   return (
     <RoleProtected allowedRoles={["instructor"]}>
       <Header hide={["role"]} />
-      <main className="mx-auto flex max-w-6xl px-6 py-10">
+      <main className="mx-auto flex max-w-6xl flex-col px-4 py-6 sm:px-6 md:flex-row md:py-10">
         <InstructorSidebar />
-        <div className="flex-1 pl-8">{children}</div>
+        <div className="min-w-0 flex-1 pt-6 md:pl-8 md:pt-0">{children}</div>
       </main>
       <Footer />
     </RoleProtected>

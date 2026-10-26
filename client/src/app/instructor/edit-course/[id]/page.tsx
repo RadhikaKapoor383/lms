@@ -58,6 +58,7 @@ export default function InstructorEditCoursePage() {
           }}
           onSubmit={handleSubmit}
           isSubmitting={isSaving}
+          courseId={id}
           submitLabel="Save changes"
           showStatus={false}
         />

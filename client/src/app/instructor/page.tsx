@@ -144,6 +144,12 @@ export default function InstructorDashboardPage() {
               >
                 Materials
               </Link>
+              <Link
+                href={`/instructor/courses/${course._id}/completion`}
+                className="text-sm text-mustard-dark hover:underline dark:text-mustard"
+              >
+                Completion rules
+              </Link>
             </div>
           </div>
         ))}
