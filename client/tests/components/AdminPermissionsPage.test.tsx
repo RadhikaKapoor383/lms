@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const api = vi.hoisted(() => ({ rows: [] as any[], save: vi.fn() }));
+// "data" is kept as ONE object, like RTK Query does between renders. (A fresh object on every
+// render made the page re-load the saved rows and undo each toggle, which failed the tests.)
+const api = vi.hoisted(() => ({ rows: [] as any[], data: null as any, save: vi.fn() }));
 vi.mock("@/redux/features/permissions/permissionsApi", () => ({
-  useGetRolePermissionsQuery: () => ({ data: { permissions: api.rows }, isLoading: false, isError: false }),
+  useGetRolePermissionsQuery: () => ({ data: api.data, isLoading: false, isError: false }),
   useUpdateRolePermissionsMutation: () => [(arg: any) => ({ unwrap: () => api.save(arg) }), { isLoading: false }],
 }));
 
@@ -15,6 +17,7 @@ beforeEach(() => {
     { key: "course.create", role: "instructor", label: "create new courses", allowed: true },
     { key: "review.write", role: "student", label: "write course reviews", allowed: false },
   ];
+  api.data = { permissions: api.rows };
   api.save.mockReset();
   api.save.mockResolvedValue({});
 });
