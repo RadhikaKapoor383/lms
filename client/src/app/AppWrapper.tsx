@@ -2,6 +2,7 @@
 
 import { useLoadUserQuery } from "@/redux/features/auth/authApi";
 import SessionGuard from "@/components/SessionGuard";
+import SplashScreen from "@/components/SplashScreen";
 
 export function AppWrapper({ children }: { children: React.ReactNode }) {
   // Fires /me on first load - if a valid session cookie exists, this
@@ -9,6 +10,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   useLoadUserQuery(undefined);
   return (
     <>
+      <SplashScreen />
       {children}
       <SessionGuard />
     </>
