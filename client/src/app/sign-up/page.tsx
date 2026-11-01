@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
 import { useState } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { registerSchema } from "@/utils/validationSchemas";
 import { useRegisterMutation } from "@/redux/features/auth/authApi";
 import PasswordInput from "@/components/PasswordInput";
+import AuthShell from "@/components/AuthShell";
+import AuthField, { MailIcon, UserIcon, LockIcon, authInputClass } from "@/components/AuthField";
+import AuthSubmit from "@/components/AuthSubmit";
+import PasswordStrength from "@/components/PasswordStrength";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -30,89 +32,84 @@ export default function SignUpPage() {
   });
 
   return (
-    <>
-      <Header />
-      <main className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-6 py-16">
-        <h1 className="font-display text-3xl text-ink dark:text-parchment">
-          Create your account
-        </h1>
-        <p className="mt-2 text-ink/70 dark:text-parchment/70">
-          We&apos;ll email you a code to activate it.
-        </p>
+    <AuthShell
+      title="Create your account"
+      subtitle="We'll email you a code to activate it."
+      panelTitle="Start your first path today."
+      panelPoints={[
+        "Create your account in under a minute",
+        "Activate it with the code we email you",
+        "Pick a course and start learning",
+      ]}
+    >
+      <form onSubmit={formik.handleSubmit} className="mt-8 space-y-5" noValidate>
+        <AuthField
+          id="name"
+          name="name"
+          type="text"
+          label="Name"
+          autoComplete="name"
+          icon={<UserIcon />}
+          onChange={formik.handleChange}
+          onBlur={formik.handleBlur}
+          value={formik.values.name}
+          error={formik.touched.name ? formik.errors.name : undefined}
+        />
 
-        <form onSubmit={formik.handleSubmit} className="mt-8 space-y-5" noValidate>
-          <div>
-            <label htmlFor="name" className="text-sm text-ink/70 dark:text-parchment/70">
-              Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              value={formik.values.name}
-              className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-            />
-            {formik.touched.name && formik.errors.name && (
-              <p className="mt-1 text-sm text-clay">{formik.errors.name}</p>
-            )}
-          </div>
+        <AuthField
+          id="email"
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          icon={<MailIcon />}
+          onChange={formik.handleChange}
+          onBlur={formik.handleBlur}
+          value={formik.values.email}
+          error={formik.touched.email ? formik.errors.email : undefined}
+        />
 
-          <div>
-            <label htmlFor="email" className="text-sm text-ink/70 dark:text-parchment/70">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              value={formik.values.email}
-              className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-            />
-            {formik.touched.email && formik.errors.email && (
-              <p className="mt-1 text-sm text-clay">{formik.errors.email}</p>
-            )}
-          </div>
+        <div>
+          <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
+            Password
+          </label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="new-password"
+            icon={<LockIcon />}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            value={formik.values.password}
+            className={authInputClass}
+          />
+          {formik.touched.password && formik.errors.password ? (
+            <p role="alert" className="mt-1 text-sm text-clay">
+              {formik.errors.password}
+            </p>
+          ) : (
+            <PasswordStrength password={formik.values.password} />
+          )}
+        </div>
 
-          <div>
-            <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
-              Password
-            </label>
-            <PasswordInput
-              id="password"
-              name="password"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              value={formik.values.password}
-              className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-            />
-            {formik.touched.password && formik.errors.password && (
-              <p className="mt-1 text-sm text-clay">{formik.errors.password}</p>
-            )}
-          </div>
-
-          {serverError && <p className="text-sm text-clay">{serverError}</p>}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full rounded-full bg-mustard px-6 py-3 font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
+        {serverError && (
+          <p
+            role="alert"
+            className="animate-shake border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay"
           >
-            {isLoading ? "Creating account..." : "Create account"}
-          </button>
-        </form>
+            {serverError}
+          </p>
+        )}
 
-        <p className="mt-6 text-sm text-ink/70 dark:text-parchment/70">
-          Already have an account?{" "}
-          <Link href="/login" className="text-mustard-dark hover:underline dark:text-mustard">
-            Log in
-          </Link>
-        </p>
-      </main>
-      <Footer />
-    </>
+        <AuthSubmit loading={isLoading} idleLabel="Create account" loadingLabel="Creating account..." />
+      </form>
+
+      <p className="mt-6 text-sm text-ink/70 dark:text-parchment/70">
+        Already have an account?{" "}
+        <Link href="/login" className="text-mustard-dark hover:underline dark:text-mustard">
+          Log in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
