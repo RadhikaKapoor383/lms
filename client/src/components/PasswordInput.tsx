@@ -1,6 +1,6 @@
 "use client";
 
-import { InputHTMLAttributes, useState } from "react";
+import { InputHTMLAttributes, ReactNode, useState } from "react";
 
 // A password field with an eye button to show or hide what's typed.
 // Takes the same props as a normal <input> (except `type`, which it controls),
@@ -8,15 +8,28 @@ import { InputHTMLAttributes, useState } from "react";
 //
 // The wrapper carries the spacing above the field (mt-1), so the eye button
 // stays centred on the input itself rather than on input + margin.
+//
+// Optional `icon` is drawn inside the field on the left (the input gets extra
+// left padding to make room for it).
 export default function PasswordInput({
   className = "",
+  icon,
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { icon?: ReactNode }) {
   const [visible, setVisible] = useState(false);
 
   return (
     <div className="relative mt-1">
-      <input {...props} type={visible ? "text" : "password"} className={`${className} pr-11`} />
+      {icon && (
+        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-ink/40 dark:text-parchment/40">
+          {icon}
+        </span>
+      )}
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`${className} pr-11 ${icon ? "pl-11" : ""}`}
+      />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
