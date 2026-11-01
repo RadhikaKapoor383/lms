@@ -6,6 +6,9 @@ import AnnouncementBar from "@/components/AnnouncementBar";
 import FeatureGrid, { type Feature } from "@/components/FeatureGrid";
 import Steps, { type Step } from "@/components/Steps";
 import FinalCta from "@/components/FinalCta";
+import Marquee from "@/components/Marquee";
+import ProgressPreview from "@/components/ProgressPreview";
+import FaqTeaser from "@/components/FaqTeaser";
 import Reveal from "@/components/Reveal";
 
 const features: Feature[] = [
@@ -53,6 +56,7 @@ export default function HomePage() {
       <AnnouncementBar />
       <main>
         <Hero />
+        <Marquee />
 
         <FeatureGrid
           eyebrow="Why Ledger"
@@ -60,6 +64,8 @@ export default function HomePage() {
           intro="Less noise, more structure. Everything on the platform is designed to get you from the first lesson to the last."
           features={features}
         />
+
+        <ProgressPreview />
 
         <section className="mx-auto max-w-6xl px-6 pb-16">
           <Reveal>
@@ -76,6 +82,8 @@ export default function HomePage() {
         </section>
 
         <Steps eyebrow="How it works" heading="Three steps from curious to certified." steps={steps} />
+
+        <FaqTeaser />
 
         <FinalCta />
       </main>
