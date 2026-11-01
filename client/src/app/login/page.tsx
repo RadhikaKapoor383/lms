@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
 import { useState } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { loginSchema } from "@/utils/validationSchemas";
 import { useLoginMutation } from "@/redux/features/auth/authApi";
 import { Role, roleHome } from "@/types/role";
 import PasswordInput from "@/components/PasswordInput";
 import { useAppSelector } from "@/hooks/redux";
+import AuthShell from "@/components/AuthShell";
+import AuthField, { MailIcon, LockIcon, authInputClass } from "@/components/AuthField";
+import AuthSubmit from "@/components/AuthSubmit";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,87 +36,86 @@ export default function LoginPage() {
   });
 
   return (
-    <>
-      <Header />
-      <main className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-6 py-16">
-        <h1 className="font-display text-3xl text-ink dark:text-parchment">
-          Welcome back
-        </h1>
-        <p className="mt-2 text-ink/70 dark:text-parchment/70">
-          Log in to pick up where you left off.
+    <AuthShell
+      title="Welcome back"
+      subtitle="Log in to pick up where you left off."
+      panelTitle="Your next lesson is waiting."
+      panelPoints={[
+        "Continue from the exact lesson you left",
+        "See your real progress in every course",
+        "Download the certificates you've earned",
+      ]}
+    >
+      {endedReason && (
+        <p
+          role="status"
+          className="mt-4 border border-mustard/50 bg-mustard/10 px-4 py-3 text-sm text-ink dark:text-parchment"
+        >
+          {endedReason}
         </p>
-        {endedReason && (
+      )}
+
+      <form onSubmit={formik.handleSubmit} className="mt-8 space-y-5" noValidate>
+        <AuthField
+          id="email"
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          icon={<MailIcon />}
+          onChange={formik.handleChange}
+          onBlur={formik.handleBlur}
+          value={formik.values.email}
+          error={formik.touched.email ? formik.errors.email : undefined}
+        />
+
+        <div>
+          <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
+            Password
+          </label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            icon={<LockIcon />}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            value={formik.values.password}
+            className={authInputClass}
+          />
+          {formik.touched.password && formik.errors.password && (
+            <p role="alert" className="mt-1 text-sm text-clay">
+              {formik.errors.password}
+            </p>
+          )}
+          <p className="mt-2 text-right text-sm">
+            <Link
+              href="/forgot-password"
+              className="text-mustard-dark hover:underline dark:text-mustard"
+            >
+              Forgot password?
+            </Link>
+          </p>
+        </div>
+
+        {serverError && (
           <p
-            role="status"
-            className="mt-4 border border-mustard/50 bg-mustard/10 px-4 py-3 text-sm text-ink dark:text-parchment"
+            role="alert"
+            className="animate-shake border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-clay"
           >
-            {endedReason}
+            {serverError}
           </p>
         )}
 
-        <form onSubmit={formik.handleSubmit} className="mt-8 space-y-5" noValidate>
-          <div>
-            <label htmlFor="email" className="text-sm text-ink/70 dark:text-parchment/70">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              value={formik.values.email}
-              className="mt-1 w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-            />
-            {formik.touched.email && formik.errors.email && (
-              <p className="mt-1 text-sm text-clay">{formik.errors.email}</p>
-            )}
-          </div>
+        <AuthSubmit loading={isLoading} idleLabel="Log in" loadingLabel="Logging in..." />
+      </form>
 
-          <div>
-            <label htmlFor="password" className="text-sm text-ink/70 dark:text-parchment/70">
-              Password
-            </label>
-            <PasswordInput
-              id="password"
-              name="password"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              value={formik.values.password}
-              className="w-full border border-parchment-dark bg-transparent px-4 py-2.5 outline-none focus:border-mustard dark:border-ink-light"
-            />
-            {formik.touched.password && formik.errors.password && (
-              <p className="mt-1 text-sm text-clay">{formik.errors.password}</p>
-            )}
-            <p className="mt-2 text-right text-sm">
-              <Link
-                href="/forgot-password"
-                className="text-mustard-dark hover:underline dark:text-mustard"
-              >
-                Forgot password?
-              </Link>
-            </p>
-          </div>
-
-          {serverError && <p className="text-sm text-clay">{serverError}</p>}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full rounded-full bg-mustard px-6 py-3 font-medium text-ink hover:bg-mustard-dark disabled:opacity-60"
-          >
-            {isLoading ? "Logging in..." : "Log in"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-sm text-ink/70 dark:text-parchment/70">
-          New here?{" "}
-          <Link href="/sign-up" className="text-mustard-dark hover:underline dark:text-mustard">
-            Create an account
-          </Link>
-        </p>
-      </main>
-      <Footer />
-    </>
+      <p className="mt-6 text-sm text-ink/70 dark:text-parchment/70">
+        New here?{" "}
+        <Link href="/sign-up" className="text-mustard-dark hover:underline dark:text-mustard">
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
