@@ -27,13 +27,16 @@ export default function AuthShell({
         <aside className="relative hidden flex-col justify-center overflow-hidden bg-ink px-12 py-16 text-parchment md:flex lg:px-20">
           {/* ledger paper lines + soft glow */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <span
-                key={i}
-                className="absolute left-0 right-0 h-px bg-parchment/[0.06]"
-                style={{ top: `${((i + 1) * 100) / 11}%` }}
-              />
-            ))}
+            {/* lines fade out behind the text so they never strike through it */}
+            <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black,transparent_25%,transparent_82%,black)]">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="absolute left-0 right-0 h-px bg-parchment/[0.06]"
+                  style={{ top: `${((i + 1) * 100) / 11}%` }}
+                />
+              ))}
+            </div>
             <span className="absolute inset-y-0 left-10 w-px bg-mustard/30" />
             <div className="absolute -bottom-24 -right-24 h-80 w-80 animate-float rounded-full bg-mustard/10 blur-3xl" />
           </div>
@@ -75,7 +78,7 @@ export default function AuthShell({
           </div>
         </aside>
 
-        <section className="flex items-center justify-center px-6 py-12">
+        <section className="flex items-start justify-center px-6 py-10 md:items-center md:py-12">
           <div className="w-full max-w-md animate-fade-up">
             <h1 className="font-display text-3xl text-ink dark:text-parchment md:text-4xl">
               {title}
