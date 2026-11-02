@@ -111,17 +111,20 @@ export default function SplashScreen() {
       >
         {/* Ledger paper: ruled lines draw across, plus a mustard margin line */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <span
-              key={i}
-              className="absolute left-0 right-0 h-px origin-left animate-line-grow bg-parchment/[0.07]"
-              style={{
-                top: `${((i + 1) * 100) / 15}%`,
-                animationDelay: `${i * 70}ms`,
-                animationDuration: "1.2s",
-              }}
-            />
-          ))}
+          {/* the lines fade out in the middle so they never strike through the text */}
+          <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black,transparent_28%,transparent_72%,black)]">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <span
+                key={i}
+                className="absolute left-0 right-0 h-px origin-left animate-line-grow bg-parchment/[0.07]"
+                style={{
+                  top: `${((i + 1) * 100) / 15}%`,
+                  animationDelay: `${i * 70}ms`,
+                  animationDuration: "1.2s",
+                }}
+              />
+            ))}
+          </div>
           <span
             className="absolute inset-y-0 left-[8%] w-px origin-top animate-line-grow-y bg-mustard/40 md:left-[18%]"
             style={{ animationDelay: "400ms" }}
