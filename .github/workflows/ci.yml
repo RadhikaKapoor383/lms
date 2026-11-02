@@ -1,8 +1,10 @@
 name: CI
 
-# Runs on every push and pull request: type-checks both apps and runs their
-# unit and component tests. No database, Redis or email account is needed.
-# (The live API tests and the e2e suite need the running app - see README.)
+# Runs on every push and pull request: type-checks both apps, runs their unit and
+# component tests, and builds the client. No database, Redis or email account is
+# needed. The "visual" job also compares screenshots of the main pages (API calls
+# are mocked). (The live API tests and the main e2e suite need the running app -
+# see README.)
 on:
   push:
     branches: [main]
@@ -42,3 +44,53 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: npm test
+      # Catches errors that only show up in a real production build
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  # Screenshot tests only run once baseline screenshots exist in e2e/visual/.
+  # Create them with the "Update visual baselines" workflow (Actions tab).
+  baselines:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.count.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: count
+        run: echo "found=$(find e2e/visual -name '*.png' 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
+
+  visual:
+    needs: baselines
+    if: needs.baselines.outputs.found != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm install --no-audit --no-fund
+        working-directory: client
+      # The client is built against a fake API address; the tests answer every call themselves
+      - run: npm run build
+        working-directory: client
+        env:
+          NEXT_PUBLIC_SERVER_URI: http://localhost:8000/api/v1
+          NEXT_TELEMETRY_DISABLED: 1
+      - run: npm ci --no-audit --no-fund
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npm run test:visual
+        working-directory: e2e
+      - name: Keep the report when screenshots differ
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report
+          path: |
+            e2e/playwright-report-visual
+            e2e/test-results
+          retention-days: 7
