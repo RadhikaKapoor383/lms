@@ -6,7 +6,9 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "install-browsers": "playwright install chromium"
+    "install-browsers": "playwright install chromium",
+    "test:visual": "playwright test -c playwright.visual.config.ts",
+    "test:visual:update": "playwright test -c playwright.visual.config.ts --update-snapshots"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",
