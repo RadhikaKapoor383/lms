@@ -30,7 +30,7 @@ describe("Header on a phone", () => {
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(menu.getAttribute("aria-hidden")).toBe("false");
-    expect(menu.className).toContain("visible");
+    expect(menu.className).not.toContain("invisible");
     expect(document.body.style.overflow).toBe("hidden");
 
     fireEvent.keyDown(document, { key: "Escape" });
