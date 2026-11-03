@@ -58,7 +58,7 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
   // staggered entrance for the items inside the phone menu
-  const stagger = (i: number) => ({ transitionDelay: open ? `${200 + i * 80}ms` : "0ms" });
+  const stagger = (i: number) => ({ transitionDelay: open ? `${120 + i * 60}ms` : "0ms" });
   const itemMotion = open ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0";
 
   // Each role gets its own entry point: admin, instructor area, or student dashboard
@@ -163,20 +163,22 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
       </div>
 
       {/* Phone menu: opens as a circle growing out of the button */}
+      {/* Phone menu: a compact drawer sliding in from the right, over a dimmed page */}
+      <div
+        aria-hidden="true"
+        onClick={() => setOpen(false)}
+        className={`fixed inset-0 z-0 bg-black/50 transition-opacity duration-300 md:hidden ${
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      />
       <div
         id="mobile-menu"
         aria-hidden={!open}
-        className={`fixed inset-0 z-0 overflow-y-auto bg-ink pt-24 transition-[clip-path,visibility] duration-500 ease-[cubic-bezier(0.77,0,0.18,1)] md:hidden ${
-          open
-            ? "visible [clip-path:circle(150%_at_calc(100%_-_2.5rem)_2.25rem)]"
-            : "invisible [clip-path:circle(0%_at_calc(100%_-_2.5rem)_2.25rem)]"
+        className={`fixed inset-y-0 right-0 z-[5] w-[80%] max-w-[18rem] overflow-y-auto border-l border-parchment/10 bg-ink pt-[4.5rem] shadow-2xl transition-[transform,visibility] duration-300 ease-out md:hidden ${
+          open ? "visible translate-x-0" : "invisible translate-x-full"
         }`}
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-20 top-40 h-64 w-64 animate-float rounded-full bg-mustard/10 blur-3xl"
-        />
-        <nav aria-label="Mobile" className="relative mx-auto flex max-w-6xl flex-col px-6 pb-12">
+        <nav aria-label="Mobile" className="relative flex flex-col px-5 pb-8">
           <p
             className={`text-xs uppercase tracking-[0.25em] text-parchment/40 transition duration-500 ${itemMotion}`}
             style={stagger(0)}
@@ -189,23 +191,23 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
               href={link.href}
               onClick={() => setOpen(false)}
               aria-current={isActive(link.href) ? "page" : undefined}
-              className={`group flex items-baseline gap-4 border-b border-parchment/10 py-4 font-display text-4xl transition duration-500 ${itemMotion} ${
+              className={`group flex items-baseline gap-3 border-b border-parchment/10 py-3 font-display text-xl transition duration-500 ${itemMotion} ${
                 isActive(link.href) ? "text-mustard" : "text-parchment"
               }`}
               style={stagger(i + 1)}
             >
-              <span className="font-body text-sm tabular-nums text-parchment/40">
+              <span className="font-body text-xs tabular-nums text-parchment/40">
                 {String(i + 1).padStart(2, "0")}
               </span>
               {link.label}
-              <span className="ml-auto -translate-x-2 text-2xl text-mustard opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+              <span className="ml-auto -translate-x-2 text-lg text-mustard opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100">
                 &rarr;
               </span>
             </Link>
           ))}
 
           <div
-            className={`mt-10 space-y-3 transition duration-500 ${itemMotion}`}
+            className={`mt-6 space-y-2.5 transition duration-500 ${itemMotion}`}
             style={stagger(visibleNavLinks.length + 1)}
           >
             {user ? (
@@ -217,7 +219,7 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
                   <Link
                     href={roleLink.href}
                     onClick={() => setOpen(false)}
-                    className="block rounded-full border border-mustard px-6 py-3 text-center font-medium text-mustard transition hover:bg-mustard hover:text-ink"
+                    className="block rounded-full border border-mustard px-5 py-2.5 text-center text-sm font-medium text-mustard transition hover:bg-mustard hover:text-ink"
                   >
                     {roleLink.label}
                   </Link>
@@ -226,7 +228,7 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
                   <Link
                     href="/profile"
                     onClick={() => setOpen(false)}
-                    className="block rounded-full border border-parchment/30 px-6 py-3 text-center font-medium text-parchment transition hover:border-mustard hover:text-mustard"
+                    className="block rounded-full border border-parchment/30 px-5 py-2.5 text-center text-sm font-medium text-parchment transition hover:border-mustard hover:text-mustard"
                   >
                     Your profile
                   </Link>
@@ -237,7 +239,7 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
                     setOpen(false);
                     logout(undefined);
                   }}
-                  className="w-full rounded-full bg-mustard px-6 py-3 font-medium text-ink transition hover:bg-mustard-dark"
+                  className="w-full rounded-full bg-mustard px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-mustard-dark"
                 >
                   Log out
                 </button>
@@ -247,14 +249,14 @@ export default function Header({ hide = [] }: { hide?: HeaderHidable[] }) {
                 <Link
                   href="/login"
                   onClick={() => setOpen(false)}
-                  className="block rounded-full bg-mustard px-6 py-3 text-center font-medium text-ink transition hover:bg-mustard-dark"
+                  className="block rounded-full bg-mustard px-5 py-2.5 text-center text-sm font-medium text-ink transition hover:bg-mustard-dark"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/sign-up"
                   onClick={() => setOpen(false)}
-                  className="block rounded-full border border-parchment/30 px-6 py-3 text-center font-medium text-parchment transition hover:border-mustard hover:text-mustard"
+                  className="block rounded-full border border-parchment/30 px-5 py-2.5 text-center text-sm font-medium text-parchment transition hover:border-mustard hover:text-mustard"
                 >
                   Create account
                 </Link>
