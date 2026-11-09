@@ -10,6 +10,7 @@ import {
   getInstructorAnalytics,
   getStudentAnalytics,
 } from "../controllers/analytics.controller";
+import { getStudentLedger } from "../controllers/ledger.controller";
 
 const dashboardRouter = express.Router();
 
@@ -21,5 +22,6 @@ dashboardRouter.get("/instructor/analytics", isAuthenticated, authorizeRoles("in
 
 dashboardRouter.get("/student/dashboard", isAuthenticated, authorizeRoles("student"), getStudentDashboard);
 dashboardRouter.get("/student/analytics", isAuthenticated, authorizeRoles("student"), getStudentAnalytics);
+dashboardRouter.get("/student/ledger", isAuthenticated, authorizeRoles("student"), getStudentLedger);
 
 export default dashboardRouter;
