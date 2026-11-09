@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
+import CertificateSeal from "@/components/ledger/CertificateSeal";
 import { useVerifyCertificateQuery } from "@/redux/features/certificates/certificatesApi";
 
 const formatDate = (value: string) =>
@@ -137,7 +138,13 @@ export default function CertificatePage() {
                 {certificate.courseName}
               </p>
 
-              <div className="mt-12 grid gap-8 sm:grid-cols-2">
+              {!revoked && (
+                <div className="mt-10 flex justify-center">
+                  <CertificateSeal />
+                </div>
+              )}
+
+              <div className="mt-10 grid gap-8 sm:grid-cols-2">
                 <div>
                   <p className="border-b border-neutral-400 pb-2 font-medium">
                     {formatDate(certificate.completionDate)}

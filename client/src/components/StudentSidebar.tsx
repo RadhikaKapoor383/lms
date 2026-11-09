@@ -13,7 +13,7 @@ const links = [
   { label: "My courses", href: "/my-courses", match: ["/my-courses", "/course-access"] },
   { label: "Assignments", href: "/assignments", match: ["/assignments"] },
   { label: "Quizzes", href: "/quizzes", match: ["/quizzes"] },
-  { label: "Progress", href: "/progress", match: ["/progress"] },
+  { label: "Your ledger", href: "/progress", match: ["/progress"] },
   { label: "Certificates", href: "/my-certificates", match: ["/my-certificates"] },
   { label: "Notifications", href: "/notifications", match: ["/notifications"] },
   { label: "Profile", href: "/profile", match: ["/profile"] },
