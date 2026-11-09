@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import Loader from "@/components/Loader";
 import RoleProtected from "@/components/RoleProtected";
+import CompletedStamp from "@/components/ledger/CompletedStamp";
 import { useGetMyEnrollmentsQuery } from "@/redux/features/enrollment/enrollmentApi";
 
 type Filter = "all" | "progress" | "completed";
@@ -69,9 +70,13 @@ function MyCoursesContent() {
             <Link key={e._id} href={`/course-access/${e.course._id}`} className="block py-5 hover:opacity-90">
               <div className="flex items-center justify-between gap-4">
                 <p className="font-medium text-ink dark:text-parchment">{e.course.name}</p>
-                <span className="shrink-0 text-sm text-ink/50 dark:text-parchment/50">
-                  {isDone(e) ? "Completed" : `${percent}%`}
-                </span>
+                {isDone(e) ? (
+                  <span className="shrink-0">
+                    <CompletedStamp />
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-sm text-ink/50 dark:text-parchment/50">{percent}%</span>
+                )}
               </div>
               <p className="text-sm text-ink/60 dark:text-parchment/60">
                 {e.course.category?.name} · {e.instructor?.name || "No instructor"}
