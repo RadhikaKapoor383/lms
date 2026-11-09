@@ -12,6 +12,9 @@ import LessonFiles from "@/components/LessonFiles";
 import { pendingSteps } from "@/utils/certificateProgress";
 import { useGetCourseContentQuery } from "@/redux/features/courses/coursesApi";
 import LessonDiscussions from "@/components/LessonDiscussions";
+import LessonLedger from "@/components/ledger/LessonLedger";
+import ContinueCard from "@/components/ledger/ContinueCard";
+import { nextLessonIndex } from "@/utils/ledger";
 import {
   useGetCourseProgressQuery,
   useUpdateLessonProgressMutation,
@@ -41,6 +44,15 @@ export default function CourseAccessPage() {
   const completionPercentage = progressData?.progress?.completionPercentage || 0;
   const isActiveLessonDone = activeLesson && completedLessonIds.includes(activeLesson._id);
 
+  const nextIndex = nextLessonIndex(content, completedLessonIds);
+  const doneCount = content.filter((l: any) => completedLessonIds.includes(l._id)).length;
+  // jump to the next lesson not finished, and back up to the video
+  const handleContinue = () => {
+    if (nextIndex < 0) return;
+    setActiveIndex(nextIndex);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleMarkComplete = () => {
     if (!activeLesson) return;
     updateLessonProgress({
@@ -52,7 +64,7 @@ export default function CourseAccessPage() {
 
   return (
     <>
-      <main className="mx-auto max-w-6xl px-6 py-10">
+      <main className={`mx-auto max-w-6xl px-6 py-10 ${isStudent && nextIndex >= 0 ? "pb-28 lg:pb-10" : ""}`}>
         <div className="mb-4 flex justify-end gap-4">
           <Link
             href={`/course-access/${courseId}/discussions`}
@@ -162,49 +174,44 @@ export default function CourseAccessPage() {
               <LessonDiscussions courseId={courseId} lessonId={activeLesson._id} />
             </div>
 
-            <aside>
-              <div className="flex items-center justify-between">
-                <h2 className="font-display text-lg text-ink dark:text-parchment">
-                  Lessons
-                </h2>
-                {isStudent && (
-                  <span className="text-sm text-ink/50 dark:text-parchment/50">
-                    {Math.round(completionPercentage)}%
-                  </span>
-                )}
-              </div>
+            <aside className="space-y-6">
               {isStudent && (
-                <div className="mt-2 h-1.5 w-full rounded-full bg-parchment-dark dark:bg-ink">
-                  <div
-                    className="h-1.5 rounded-full bg-mustard"
-                    style={{ width: `${Math.min(100, Math.max(0, completionPercentage))}%` }}
-                  />
-                </div>
+                <ContinueCard
+                  percent={completionPercentage}
+                  doneCount={doneCount}
+                  total={content.length}
+                  nextTitle={nextIndex >= 0 ? content[nextIndex].title : undefined}
+                  onContinue={handleContinue}
+                />
               )}
-              <ul className="mt-4 space-y-1">
-                {content.map((lesson: any, i: number) => (
-                  <li key={lesson._id}>
-                    <button
-                      onClick={() => setActiveIndex(i)}
-                      className={`flex w-full items-center justify-between border-l-2 px-3 py-2 text-left text-sm ${
-                        i === activeIndex
-                          ? "border-mustard bg-parchment-dark/50 font-medium text-ink dark:bg-ink-light dark:text-parchment"
-                          : "border-transparent text-ink/70 hover:border-parchment-dark dark:text-parchment/70"
-                      }`}
-                    >
-                      <span>{i + 1}. {lesson.title}</span>
-                      {isStudent && completedLessonIds.includes(lesson._id) && (
-                        <span className="text-mustard-dark dark:text-mustard">✓</span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div>
+                <h2 className="mb-3 font-display text-lg text-ink dark:text-parchment">Lessons</h2>
+                <LessonLedger
+                  lessons={content}
+                  activeIndex={activeIndex}
+                  completedIds={completedLessonIds}
+                  showProgress={isStudent}
+                  onSelect={setActiveIndex}
+                />
+              </div>
             </aside>
           </div>
         )}
         {isStudent && <ReviewForm courseId={courseId} />}
       </main>
+
+      {/* On a phone the lesson list sits far below the video, so "Continue" stays in reach */}
+      {isStudent && nextIndex >= 0 && content.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-parchment-dark bg-parchment/95 px-4 py-3 backdrop-blur dark:border-ink-light dark:bg-ink/95 lg:hidden">
+          <button
+            type="button"
+            onClick={handleContinue}
+            className="w-full rounded-full bg-mustard px-5 py-3 text-sm font-medium text-ink"
+          >
+            Continue: {content[nextIndex].title}
+          </button>
+        </div>
+      )}
     </>
   );
 }
