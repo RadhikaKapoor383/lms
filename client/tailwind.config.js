@@ -59,6 +59,11 @@ module.exports = {
           "20%, 60%": { transform: "translateX(-6px)" },
           "40%, 80%": { transform: "translateX(6px)" },
         },
+        stamp: {
+          "0%": { opacity: "0", transform: "rotate(-6deg) scale(1.8)" },
+          "70%": { opacity: "1", transform: "rotate(-6deg) scale(0.94)" },
+          "100%": { opacity: "0.92", transform: "rotate(-6deg) scale(1)" },
+        },
         marquee: {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
@@ -75,6 +80,7 @@ module.exports = {
         tick: "tick 0.5s ease-out both",
         shake: "shake 0.4s ease-in-out",
         marquee: "marquee 35s linear infinite",
+        stamp: "stamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.1) both",
       },
     },
   },
