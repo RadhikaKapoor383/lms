@@ -8,6 +8,18 @@ html {
 
 body {
   @apply bg-parchment text-ink dark:bg-ink dark:text-parchment font-body;
+  /* A very faint paper grain behind the light theme: a tiny inline SVG tile
+     (about 3% strength), not an image file. It sits under the content, so
+     cards and text are never affected. The grain darkens a little, so the base
+     colour is a touch lighter than "parchment": together they average out to
+     exactly parchment, which keeps areas with a plain parchment background
+     (like the footer) from looking like a different shade. */
+  background-color: #faf3e7;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .06 0 0 0 0 .18 0 0 0 0 .17 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.dark body {
+  background-image: none;
 }
 
 ::selection {
