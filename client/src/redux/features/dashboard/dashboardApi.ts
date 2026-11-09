@@ -12,6 +12,8 @@ export const dashboardApi = apiSlice.injectEndpoints({
     getInstructorAnalytics: builder.query({ query: () => get("instructor/analytics") }),
     getStudentDashboard: builder.query({ query: () => get("student/dashboard") }),
     getStudentAnalytics: builder.query({ query: () => get("student/analytics") }),
+    // Everything the student has finished, newest first. `limit` grows when they ask for earlier entries.
+    getStudentLedger: builder.query({ query: (limit: number = 40) => get(`student/ledger?limit=${limit}`) }),
   }),
 });
 
@@ -22,4 +24,5 @@ export const {
   useGetInstructorAnalyticsQuery,
   useGetStudentDashboardQuery,
   useGetStudentAnalyticsQuery,
+  useGetStudentLedgerQuery,
 } = dashboardApi;
